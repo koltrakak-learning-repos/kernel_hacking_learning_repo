@@ -10,7 +10,7 @@
 Ti conviene usare una macchina virtuale, semplicemente perché, se fai casini, non distruggi il file system del tuo PC.
 
 ### 2. Scelta del Virtualizzatore
-Se sei sotto Linux, hai due scelte come virtualizzatore: **VirtualBox** e **KVM/QEMU**. 
+Se sei sotto Linux, hai due scelte come virtualizzatore: **VirtualBox** e **KVM/QEMU**.
 * VirtualBox è forse un po' più facile da configurare, ma può non rispettare la configurazione *"Non usare la cache dell'host"*, necessaria per test di performance da dentro una VM.
 * **Attenzione:** Per entrambi i virtualizzatori, potrebbero non funzionare correttamente su un kernel custom (ossia fatto da te), perché quest'ultimo potrebbe non avere tutte le opzioni necessarie abilitate. Uno dei modi per assicurarsi di avere un kernel con tutte le opzioni necessarie abilitate è eseguire il **passo 6** avendo il virtualizzatore che volete utilizzare in funzione.
 
@@ -18,7 +18,7 @@ Se sei sotto Linux, hai due scelte come virtualizzatore: **VirtualBox** e **KVM/
 Installa nella macchina virtuale la distribuzione che ti piace di più. In quanto alle dimensioni del disco, ti consiglio di lasciare **30GB liberi**.
 
 ### 4. Installazione delle Dipendenze
-Installati un po' di dipendenze. 
+Installati un po' di dipendenze.
 
 * **Sistemi APT-based (Debian, Ubuntu, ecc.):**
   ```bash
@@ -49,7 +49,7 @@ make defconfig # crea un config iniziale, necessario per lo script successivo
 ./scripts/kconfig/streamline_config.pl > minimal_config
 ```
 
-Questo comando crea un config minimale, con selezionati solo i moduli che il tuo sistema (nella macchina virtuale) sta usando nel momento in cui invochi lo script. 
+Questo comando crea un config minimale, con selezionati solo i moduli che il tuo sistema (nella macchina virtuale) sta usando nel momento in cui invochi lo script.
 
 > ⚠️ **Attenzione:** Stai attento che tutti i moduli che vuoi avere poi disponibili nel tuo nuovo kernel siano già in uso nel sistema quando invochi questo script. Se non sai bene come procedere, invoca tranquillamente questo script ora; poi, se mancheranno dei pezzi nel kernel, ripeterai questa operazione e la compilazione successiva.
 
@@ -69,7 +69,7 @@ per avere il file di config minimale pronto all'uso per la compilazione del kern
 
 ---
 
-> 💡 **Metodo Alternativo (Passi 6-7-8):** 
+> 💡 **Metodo Alternativo (Passi 6-7-8):**
 > Una volta diventati un po' più pratici di questi passi, potreste anche eseguire la procedura indicata nella sezione [Metodo per ottenere la configurazione del kernel in esecuzione](#metodo-per-ottenere-la-configurazione-del-kernel-in-esecuzione). Questa procedura vi è utile se volete che il nuovo kernel abbia una configurazione identica a quella del kernel in esecuzione.
 
 ---
@@ -98,7 +98,7 @@ All'inizio della compilazione, potrebbe avvenire un passo automatico di modifica
   *Soluzione:* Installare il pacchetto di sviluppo OpenSSL.
   * Debian/Ubuntu: `sudo apt-get install libssl-dev`
   * Fedora/CentOS/RHEL: `sudo yum install openssl-devel`
-  
+
   Una volta installato il pacchetto giusto, riprova a compilare.
 
 * **Altri fallimenti sconosciuti:**
@@ -285,6 +285,21 @@ Se lo script `streamline_config.pl` non attiva l'audio, verificate di abilitare 
 <M> OSS Mixer API
 <M> OSS PCM (digital audio) API
 ```
+
+---
+
+### Problemi con Display (ad esempio con virtualizzatore UTM su processori della famiglia M)
+
+Configurare le seguenti opzioni a 'y' nel .config:
+CONFIG_SCSI_VIRTIO=y
+CONFIG_DRM=y
+CONFIG_DRM_SIMPLEDRM=y
+CONFIG_DRM_VIRTIO_GPU=y
+CONFIG_VIRTIO_INPUT=y
+CONFIG_DRM_KMS_HELPER=y
+CONFIG_DRM_FBDEV_EMULATION=y
+
+Potete farlo sia manualmente nel .config che tramite menuconfig (cercando ciascuna opzione).
 
 ---
 
