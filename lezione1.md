@@ -112,7 +112,13 @@ The kernel image isn't so much an executable kernel, but a compressed kernel ima
 ... kernel initialization ...
 
 - after this ends the kernel creates and runs the first init user process
-- and the idle_task for when there aren't any tasks left to schedule
+    - and the idle_task for when there aren't any tasks left to schedule
+    - this is done through a fork + exec combo
+    - the father process executes the idle_task, the child process executes /sbin/init
+- Al termine del proprio avvio, il kernel Linux avvierà un eseguibile di inizializzazione dello dello spazio utente
+    - tipicamente /sbin/init, che è un link a /lib/systemd/sytemd
+
+Tale eseguibile si occupa tipicamente di avviare l’intero sistema operativo, ossia: servizi, interfaccia utente
 
 During the boot of the kernel, the initial-RAM disk (initrd) that was loaded into memory by the stage 2 boot loader is copied into RAM and mounted. This initrd serves as a temporary root file system in RAM and allows the kernel to fully boot without having to mount any physical disks.
 
@@ -146,3 +152,60 @@ esploratore per il codice sorgente
 
 ## head_64.s
 
+...
+
+## printing stuff
+
+printk == printf del kernel
+
+pr_notice == printk specializzata
+
+- ci sono diversi livelli di criticità associati all stampe
+
+modalità quiet
+
+...
+
+il kernel viene invocato come qualsiasi altro comando di una shell, **soltanto che stavolta l'ambiente è quello del bootloader**
+
+il bootloader è colui che invoca il kernel e passo i cmdline parameters. Per cambiare i cmdline parameters del kernel bisogna modificare il file di configurazione di grub
+
+### modalità menu di grub
+
+ogni entry del menù è un insieme di righe di comando
+
+- se modifico le righe di comando associate ad una entry al volo (tasto 'e') quelle modifiche sono effimere
+
+# kernel log
+
+il kernel non interagisce con l'utente, le printk vengono scritte nel kernel log -> un array circolare
+
+interessante anche la strategia del bloccarsi quando sono pieno in questi sistemi produttore consumatore
+
+...
+
+**NB**: notiamo che c'è un altro /init nascosto oltre a systemd
+
+- notiamo dei messaggi relativi ad un /init, e dopo un po' dei messaggi relativi a systemd
+
+# Vari servizi che systemd fa partire
+
+...
+
+tyme sync
+
+...
+
+oom-deamon
+
+- servizio che tramite euristiche sceglio quale processo uccidere quando la memoria finisce
+
+...
+
+```Differenze che noti quando fai il boot con il kernel che compili te
+è tutto dovuto alla config minimale che creiamo per compilare il kernel
+
+sostanzialmente stiamo disattivando cose che non dovremmo
+
+è interessante anche sapere che c'è gente che di mestiere fa la configurazione di queste build del kernel per macchine/sistemi diversi
+```
