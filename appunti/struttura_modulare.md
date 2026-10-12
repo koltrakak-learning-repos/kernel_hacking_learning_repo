@@ -97,6 +97,7 @@ Nel momento in cui il kernel Linux termina la sua fase di boot interna, monta l'
 L'init di initramfs gira interamente nello spazio utente e, pur disponendo di un set molto limitato di binari statiche stipati nell'archivio CPIO compresso, effettua le operazioni di inizializzazione descritte in precedenza tramite comandi bash (caricamento dei moduli, mount di /, lancio del vero init).
 
 ### Creazione initramfs
+
 Avviene tramite comando mkinitramfs
 
 Crea un initramfs per il kernel running, seguendo le istruzioni contenute in un file di configurazione
