@@ -87,3 +87,11 @@ Il kernel Linux supporta un TIPO di **ram filesystem** chiamato tmpfs
 - di conseguenza è volatile 
 - ma è giusto così dato che fare modifiche permanenti farebbe più danni che altro
 - dobbiamo solo caricare i moduli e avviare l'userspace init
+
+### processo di boot e initramfs
+
+È notevole il fatto che l'init dentro a initramfs sia un semplice script bash. Siamo già a tutti gli effetti in userspace!
+
+Nel momento in cui il kernel Linux termina la sua fase di boot interna, monta l'initramfs in memoria (come rootfs temporaneo) e lancia il primo eseguibile con PID 1, avviene la transizione definitiva dal kernel mode allo user mode.
+
+L'init di initramfs gira interamente nello spazio utente e, pur disponendo di un set molto limitato di binari statiche stipati nell'archivio CPIO compresso, effettua le operazioni di inizializzazione descritte in precedenza tramite comandi bash (caricamento dei moduli, mount di /, lancio del vero init).
