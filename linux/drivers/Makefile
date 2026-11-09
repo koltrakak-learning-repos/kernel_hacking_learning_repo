@@ -6,6 +6,9 @@
 # Rewritten to use lists instead of if-statements.
 #
 
+# entry per il mio modulo interno
+obj-y 				+= my-internal-module/
+
 obj-y				+= cache/
 obj-y				+= irqchip/
 obj-y				+= bus/

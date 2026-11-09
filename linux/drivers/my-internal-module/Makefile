@@ -1,0 +1,1 @@
+obj-$(CONFIG_MY_INTERNAL_MODULE) += main.o

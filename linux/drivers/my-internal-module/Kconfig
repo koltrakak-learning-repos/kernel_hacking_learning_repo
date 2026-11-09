@@ -1,0 +1,3 @@
+config MY_INTERNAL_MODULE
+	tristate "my internal module"
+	default m

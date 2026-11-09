@@ -59,6 +59,8 @@ Come modifico il config?
     - In questo contesto, **rebuildare il kernel con la vecchia config è problematico**
     - make oldconfig il vecchio file di configurazione come base e ti interroga solo sulle nuove opzioni introdotte nella versione corrente del kernel, lasciando inalterate le vecchie scelte.
         - questo target tenta di modificare il .config del vecchio kernel adattandolo per il nuovo kernel
+- **make olddefconfig**
+    - Same as oldconfig but sets new options to their default value without prompting
 - **make defconfig (default config)**
     - questo mi crea un .config con i valori di default per tutte le opzioni
     - questi default sono definiti nel database
