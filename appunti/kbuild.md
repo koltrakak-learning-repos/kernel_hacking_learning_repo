@@ -74,7 +74,19 @@ Altri target interessant sono quelli che hai già usato
 - bzImage
 - ...
 
-## effetto di make install 
+**NB**: invece che buildare e configurare tutto nel src tree, è possibile specificare una build dir tramite: `O=<percorso build directory>`
+
+- a questo punto piuttosto che lanciare i comandi make dalla src tree (richiederebbe specificare O= ogni volta) è più comodo lanciarli dalla build dir direttamente
+
+```
+cd ./build
+make menuconfig
+make -j$(nproc)
+```  
+
+Quando lanci per la prima volta un comando con O=./build, Kbuild genera automaticamente un piccolo Makefile di "stub" all'interno della cartella ./build. Questo file reindirizza automaticamente tutti i comandi ai sorgenti originali salvando gli output nella build dir
+
+### effetto di make install 
 
 Il target make install crea/sovrascrive **quattro file**
 
@@ -90,6 +102,13 @@ Il target make install crea/sovrascrive **quattro file**
     - Non approfondiamo
 
 Dopo aver creato/sovrascritto questi file, il make install aggiorna tipicamente il bootloader (eseguendo update-grub nel caso di grub)
+
+### dove posso vedere i moduli che ho compilato per un kernel?
+
+dentro a `/lib/modules/<versione kernel>/modules.builtin` sono listati i moduli builtin per una determinata versione del kernel
+
+dentro a `/lib/modules/kernel/<path del modulo nel src tree>/xxx.ko` sono salvati i moduli dinamici per una determinata versione del kernel
+
 
 # Gestione dei moduli
 
