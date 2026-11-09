@@ -1,3 +1,6 @@
+linux/build
+linux/Documentation
+
 # Prerequisites
 *.d
 
