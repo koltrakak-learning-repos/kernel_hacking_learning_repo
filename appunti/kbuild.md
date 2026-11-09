@@ -32,9 +32,10 @@ Abbiamo quindi makefile gerarchici e file di configurazione gerarchici
 - make help
     - il build system è autodocumentato
 - make clean
-    - pulisce artefatti di build, ma non la .config
+    - pulisce artefatti di build (.o, .d, ...), ma non .config
 - make mrproper
     - pulisce tutto, lascia solo i file sorgenti
+    - pulisce anche header file generati, .config, script vari, e altre cose che non so
 
 Le opzioni di configurazione sono interdipendenti tra di loro
 
