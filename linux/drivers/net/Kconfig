@@ -3,6 +3,10 @@
 # Network device configuration
 #
 
+config MY_SUBDIR_MODULE
+	tristate "my subdir module"
+	default m
+
 menuconfig NETDEVICES
 	default y if UML
 	depends on NET

@@ -3,6 +3,8 @@
 # Makefile for the Linux network device drivers.
 #
 
+obj-$(CONFIG_MY_SUBDIR_MODULE) += my-subdir-module.o
+
 #
 # Networking Core Drivers
 #

@@ -1,1 +1,1 @@
-obj-$(CONFIG_MY_INTERNAL_MODULE) += main.o
+obj-$(CONFIG_MY_INTERNAL_MODULE) += my-internal-module.o
