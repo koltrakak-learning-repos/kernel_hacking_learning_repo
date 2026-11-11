@@ -40,6 +40,26 @@ Il caricamento dinamico dei moduli è equivalente al caricamento dinamico di sha
 
 **NB**: To load a module, the kernel must contain all the kernel symbols used in the module. If those symbols were not included in the kernel at compile time, the module will not be loaded due to missing dependencies. 
 
+Dettagli caricamento moduli e linking:
+
+- Collegamento da modulo a core prevede
+    - caricamento del modulo in memoria (nello spazio di indirizzamento del kernel)
+    - rilocazione del testo del modulo per aggiustare i riferimenti del modulo verso il codice del kernel
+- Collegamento da core a modulo
+    - il kernel core non può usare i simboli definiti all'interno di un modulo (non sa a priori come si chiamano)
+    - il core invoca le funzionalità fornite dai moduli solo tramite strutture di callback (ossia di puntatori a funzione) popolate durante il caricamento del modulo
+        - meccanismo tipo plugin
+        - sono presenti delle strutture dati con un nome fisso che contengono dei puntatori che vengono popolati con gli indirizzi di memoria delle funzioni/simboli del modulo quando quest'ultimo viene caricato 
+    - **NB**: Quando un modulo viene inizializzato (all’avvio del kernel se modulo built-in, al caricamento se modulo dinamico), il codice di init del modulo definirà le istanze di callback appropriate per quel modulo e le registrerà con le funzionalità già previste staticamente dal codice del kernel
+- Collegamento da modulo a modulo
+    - I moduli possono interagire tra loro:
+        - Tramite registrazione di callback, come si fa per permettere al core di interagire con un modulo
+        - Tramite collegamento diretto dei simboli
+            - implementato mediante le macro EXPORT_SYMBOL
+                - si crea una dipendenza diretta se un modulo A utilizza un simbolo esportato da un modulo B
+                - sono proprio le dipendenze gestite automaticamente da modprobe
+        - Con l’ausilio di funzionalità come symbol_get e symbol_put si possono gestire dipendenze opzionali
+
 PROBLEMA:
 
 - All’avvio del kernel, i moduli da caricare non sono già caricati

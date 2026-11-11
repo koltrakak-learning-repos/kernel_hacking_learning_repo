@@ -26,7 +26,6 @@ Le operazioni eseguite make sono stabilite attraverso una combinazione di file:
 
 Abbiamo quindi makefile gerarchici e file di configurazione gerarchici
 
-
 ## make targets
 
 - make help
@@ -109,7 +108,6 @@ dentro a `/lib/modules/<versione kernel>/modules.builtin` sono listati i moduli 
 
 dentro a `/lib/modules/kernel/<path del modulo nel src tree>/xxx.ko` sono salvati i moduli dinamici per una determinata versione del kernel
 
-
 # Gestione dei moduli
 
 - lsmod 
@@ -142,7 +140,7 @@ dentro a `/lib/modules/kernel/<path del modulo nel src tree>/xxx.ko` sono salvat
 - modinfo
     - info utili su un modulo
 
-## Moduli esterni
+# Moduli esterni
 
 Altro asse di classificazione dei moduli (ortogonale rispetto a statico / dinamico)
 
@@ -150,7 +148,7 @@ I moduli esterni sono quelli out-of-tree
 
 - possiamo sviluppare dei moduli in maniera indipendente rispetto allo sviluppo del kernel
 
-### Creazione del nostro primo modulo esterno
+## Creazione del nostro primo modulo esterno
 
 Dato il kernel per cui si crea un modulo esterno, l’albero dei sorgenti di tale kernel può non essere presente affatto nel sistema in cui si crea un modulo esterno
 
@@ -169,7 +167,7 @@ NB: per il funzionamento corretto di un modulo esterno, il kernel running (quell
 - nel migliore dei casi, il sistema di caricamento dei moduli si accorge del mismatch è produce un errore: `modprobe: FATAL: Invalid module format`
 - ma se questo non succede e l'ABI è rotta, il tuo modulo leggerà o scriverà in posizioni di memoria errate, causando un Kernel Panic immediato o corrompendo la memoria di sistema silenziosamente.
 
-moduli statici chiamano le funzioni di init solamente una volta al boot e le funzioni di exit mai. Di conseguenza una volta eseguiti gli init al boot il kernel può liberare la memoria di queste funzioni. Le funzioni di exit non vengono neanche compilate
+Aside: moduli statici chiamano le funzioni di init solamente una volta al boot e le funzioni di exit mai. Di conseguenza una volta eseguiti gli init al boot il kernel può liberare la memoria di queste funzioni. Le funzioni di exit non vengono neanche compilate
 
 # kbuild continued
 
@@ -220,7 +218,7 @@ obj-$(CONFIG_FOO) += foo.o
 
 If CONFIG_FOO is neither y nor m, then the file will not be compiled nor linked.
 
-### Modules
+### What forms a module?
 
 **A module may be built from one source file or several source files**
 
@@ -395,71 +393,49 @@ un modulo è interno se i suoi sorgenti appartengono all'albero dei sorgenti del
 - i moduli esterni possono essere solamente dinamici (vengono caricati solo con insmod)
 - i moduli interni invece possono essere sia builtin che dinamici
 
-...
+Un nuovo modulo interno può risiedere
 
-nella subdirectory del mio modulo interno ci metto
+- in una sua subdirectory dedicata in cui ci metto
+    - i suoi sorgenti
+    - il Makefile
+    - il Kconfig
+- in una subdirectory condivisa con altri moduli 
+    - Sorgenti, Makefile e Kconfig del modulo non saranno più distinti ma saranno mischiati con tutti gli altri moduli nella subdir
 
-- i miei sorgenti
-- il Makefile
-- il KConfig
+## Moduli dinamici richiedono la compilazione del kernel
 
-...
+Al contrario di quello che si potrebbe pensare, l'aggiunta di un modulo dinamico al .config non richiede solamente la compilazione e il caricamento del modulo, bensì **è necessario anche ricompilare e riavviare il kernel stesso**
 
-...
+- **NB**: questa mi sembra più una buona pratica che un requisito
+- questo dato che la causa mi sembrano i soliti problemi di ABI che richiedono che modulo e kernel siano compatibili
+    - modificare il .config cambia il layout delle strutture dati, campi, funzioni, simboli, ...
+        - spesso tutte le entità descritta sopra vengono incluse tramite #ifdef quando un modulo è incluso con m e vengono elise quando il modulo non è incluso
+        - se modulo e kernel non concordano su tutte queste entità -> problemi di ABI
+    - il kernel potrebbe non star esportando dei simboli che il modulo utilizza
+        - Il modulo usa simboli esportati con EXPORT_SYMBOL. Se il kernel in esecuzione è stato compilato senza una certa funzione (non c'è nel .config), o senza l’opzione che la include o la esporta, il modulo non si carica (Unknown symbol in module)
+- il meccanismo di caricamento dei moduli include dei check per assicurarsi che kernel e modulo siano compatibili
+    - i moduli sono versionati (*vermagic*), i simboli hanno un CRC, ...
+    - studia qua per più dettagli https://docs.kernel.org/kbuild/modules.html#module-versioning
 
----
+È interessante notare la differenza tra moduli interni e moduli esterni in questo contesto
 
-### Domanda slide 67
+- Moduli interni: il modulo fa parte dei sorgenti del kernel ed è governato da opzioni del Kconfig. Abilitarlo significa modificare .config, quindi potenzialmente cambiare la build del kernel -> necessario ricompilare anche il kernel
+- Moduli esterni: il modulo vive fuori dall’albero e si compila contro l’albero di build (o gli header) del kernel già installato.
+    - Qui il kernel non si ricompila, perché la configurazione non cambia e **il modulo si adatta a quella esistente**.
+    - Il vincolo di compatibilità resta, gli header devono corrispondere esattamente al kernel running (altrimenti il modulo esterno vede simboli/funzioni/.../ABI diversa rispetto a quella del kernel in cui viene caricato).
+    - Per questo esistono strumenti come DKMS, che ricompilano i moduli esterni a ogni aggiornamento del kernel. 
 
-il meccanismo di caricamento dei moduli dinamici è interessante e richiede la ricompilazione e il riavvio del kernel al contrario di quello che si potrebbe pensare
+**riassumendo**: ogni volta che cambio il .config devo ricompilare tutto quanto
 
-- ci sono strutture dati che vengono incluse tramite #ifdef quando un modulo è incluso con m e vengono elise quando il modulo non è incluso
+# caricamento automatico dei moduli on-demand
 
-è interessante anche notare che i moduli esterni sono più limitati rispetto ai moduli interni in questo contesto (la configurazione del kernel deve essere affine al mio modulo esterno)
-
-- capisci meglio
-
-
-Ricorda che to load a module, the kernel must contain all the kernel symbols used in the module. If those symbols were not included in the kernel at compile time, the module will not be loaded due to missing dependencies. 
-
-
-
-
-
-
----
-
-...
-
-riassumendo, ogni volta che cambio il .config devo ricompilare tutto quanto
-
-### esercizio modulo interno
-
-mettiamolo dentro drivers/ dato che è spesso usato come contenitore generico
-
-## Collegamento da modulo a core 
-
-rilocazione del testo del modulo per far aggiustare i riferimenti all'interno del modulo verso il codice del kernel
-
-## Collegamento da core a modulo
-
-il kernel non può usare i simboli definiti all'interno di un modulo
-
-il collegamento avviene tramite un meccanismo tipo plugin
-
-- sono presenti delle strutture dati con un nome fisso che contengono dei puntatori che vengono popolati con gli indirizzi di memoria delle funzioni/simboli del modulo quando quest'ultimo viene caricato 
-
-## caricamento automatico dei moduli on-demand
-
-il kernel è in grado di caricare da solo i moduli di cui ha bisogno
+il kernel è in grado di caricare da solo i moduli al momento del bisogno
 
 - come? quando? ... lo scopriremo
 
 guarda esempio i/o sched in slide 99
 
----
-
-## How to compile source code segments conditionally
+# How to compile source code segments conditionally
 
 Abbiamo visto che configurando un'opzione nel .config, possiamo aggiungere o meno un modulo alle list obj-y/obj-m, e quindi decidere decidere se includere o meno quel modulo nella nostra build del kernel 
 
