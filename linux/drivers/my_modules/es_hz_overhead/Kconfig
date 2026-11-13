@@ -1,0 +1,3 @@
+config HZ_PRINTER
+	tristate "hz_printer module"
+	default m

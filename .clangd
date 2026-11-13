@@ -1,0 +1,13 @@
+CompileFlags:
+  Add: 
+    - "-x"
+    - "c"
+    - "-std=gnu11"
+    - "-D__KERNEL__"
+    - "-DMODULE"
+    - "-nostdinc"
+    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/include"
+    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/arch/x86/include"
+    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/arch/x86/include/generated"
+    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/build/include"
+    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/build/arch/x86/include/generated"

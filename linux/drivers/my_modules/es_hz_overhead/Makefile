@@ -1,0 +1,1 @@
+obj-$(CONFIG_HZ_PRINTER) += hz_printer.o

@@ -5,6 +5,8 @@ esercizio impegnativo
     - misura la latenza del kernel
         - se HZ è alto, il kernel passa il tempo a gestire interrupt piuttosto che a risvegliare i miei tasks
 
+Cyclictest accurately and repeatedly measures the difference between a thread's intended wake-up time and the time at which it actually wakes up from clock_nanosleep in order to provide statistics about the system's latencies
+
 ---
 
 # Approfondimento kernel log

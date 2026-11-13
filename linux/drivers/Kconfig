@@ -1,8 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0
 menu "Device Drivers"
 
-# my module config
+
+# ---------------------------------------------------------------------------- #
+# mie entry
+# ---------------------------------------------------------------------------- #
+
+source "drivers/my_modules/Kconfig"
 source "drivers/my-internal-module/Kconfig"
+
+# ---------------------------------------------------------------------------- #
 
 # Keep I/O buses first
 

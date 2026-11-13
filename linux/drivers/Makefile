@@ -6,8 +6,14 @@
 # Rewritten to use lists instead of if-statements.
 #
 
-# entry per il mio modulo interno
+# ---------------------------------------------------------------------------- #
+# mie entry
+# ---------------------------------------------------------------------------- #
+
+obj-y 				+= my_modules/
 obj-y 				+= my-internal-module/
+
+# ---------------------------------------------------------------------------- #
 
 obj-y				+= cache/
 obj-y				+= irqchip/
