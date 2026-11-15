@@ -1,3 +1,12 @@
+Cyclictest repeatedly measures the difference between a thread's intended wake-up time and the time at which it actually wakes up from clock_nanosleep in order to provide statistics about the system's latencies
+
+- cyclictest misura ripetutamente il ritardo che passa tra il momento in cui si sveglia e il momento in cui doveva svegliarsi
+    - dice sleep for 1ms e quando si risveglia controlla se è passato 1ms o di più
+    - misura la latenza del kernel
+        - se HZ è alto, il kernel passa il tempo a gestire interrupt piuttosto che a risvegliare i miei tasks
+
+# risultati
+
 necessario package rt-tests
 
 **1000 Hz**
@@ -32,8 +41,7 @@ MiB Swap:      0.0 total,      0.0 free,      0.0 used.    881.9 avail Mem
 
 T: 0 (  332) P: 0 I:1000 C:  53114 Min:     51 Act:   54 Avg:   85 Max:     928
 
-
-# conclusione:
+# conclusione
 
 - se abbasso HZ la latenza aumenta
 - non ho notato particolari differenze di uso della cpu
