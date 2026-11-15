@@ -1187,6 +1187,10 @@ void start_kernel(void)
 	arch_post_acpi_subsys_init();
 	kcsan_init();
 
+	// // proviamo ad aggiungere un bug
+	// int* a = 0;
+	// *a = 1;
+
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
 

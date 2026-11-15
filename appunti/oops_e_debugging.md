@@ -134,9 +134,12 @@ A questo punto, per ritrovare la riga in cui accade il fallimento, basta invocar
 
 - `gdb <nome_file_oggetto_o_modulo_contenente_tale_riga>`
 - Nel caso si tratti di un modulo, può darsi che funzioni solo se passate a gdb il file contenente il modulo, ossia il file .ko.
-- NON PASSATE TUTTO L'ESEGUIBILE DEL KERNEL, perché altrimenti funziona solo se quella riga è relativa ad un componente compilato con built-in.
-    - TODO: perchè il prof ha fatto sembrare questo caso una tragedia? debuggare roba builtin non mi sembra un caso tanto eccezzionale
+- NB: non passate tutto l'eseguibile del kernel
+    - funziona solo se quella riga è relativa ad un componente compilato con built-in
+    - ma comunque non è necessario dato che basta il .o del file contenente la funzione colpevole e non l'intero binario enorme che rallenta tutto
 
 esempio:
 - se il problema è in una funzione definita dentro bfq-iosched.c, allora `gdb <percorso_build>/block/bfq-iosched.o`
 - Poi, da dentro gdb: `list *(nome_funzione+offset)`
+
+FIXME: come faccio a recuperare il nome del file in cui è definita la funzione colpevole?
