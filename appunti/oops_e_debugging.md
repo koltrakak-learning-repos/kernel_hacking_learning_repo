@@ -29,11 +29,14 @@ Per leggere l'output della porta seriale, le macchine virtuali forniscono di nor
 
 Quando nel kernel avviene un fallimento di qualsiasi tipo, tale fallimento viene informalmente chiamato OOPS.
 
+- un kernel oops è un meccanismo del kernel per la gestione di bug rilevati
+
 Al verificarsi di un oops vengono compiute le seguenti azioni:
 
 - Il kernel aggiunge in fondo al kernel log un messaggio per informare dell'accaduto: il cosiddetto messaggio di (errore per il) kernel oops.
-- kill del processo interessato, se l'oops è stato causato da un processo utente (e.g. modprobe), per poter continuare l'esecuzione del sistema
+- kill del processo interessato (e del suo contesto nel kernel (e.g. kernel stack, ...)), se l'oops è stato causato da un processo utente (e.g. modprobe), per poter continuare l'esecuzione del sistema
     - **esecuzione che però non è più affidabile** (capiamo meglio dopo cosa significa)
+    - The offending process that triggered this Oops gets killed **without releasing locks or cleaning up structures**, this is called an unstable state
 - se le risorse necessarie per andare avanti non sono più disponibili, allora si ha un cosiddetto KERNEL PANIC e diventa necessario un reboot
 
 Dentro al messaggio di oops nel kernel log ci sono varie informazioni necessarie per il debugging
@@ -139,7 +142,31 @@ A questo punto, per ritrovare la riga in cui accade il fallimento, basta invocar
     - ma comunque non è necessario dato che basta il .o del file contenente la funzione colpevole e non l'intero binario enorme che rallenta tutto
 
 esempio:
+
 - se il problema è in una funzione definita dentro bfq-iosched.c, allora `gdb <percorso_build>/block/bfq-iosched.o`
 - Poi, da dentro gdb: `list *(nome_funzione+offset)`
 
 FIXME: come faccio a recuperare il nome del file in cui è definita la funzione colpevole?
+
+FIXME: ci interessa il percorso che un kernel oops prende per essere generato? Nel mio caso se mettevo il mio null ptr dereference troppo presto, non riuscivo a recuperare il kernel oops; ho dovuto spostare tutto appena prima di rest_init()
+
+# Kernel oops e unstable state
+
+Linux attempts to avoid kernel crashes (i.e. kernel panics) by killing a faulty process' kernel context during a kernel oops
+
+- Linux continues to run on a compromised reliability
+
+Linux can remain reliable after kernel oops if errors are confined in a kernel context
+
+- Shared kernel objects remain correct
+- Non-faulty procs can continue running correctly without rebooting or any complex mechanisms
+
+Possiamo quindi classificare gli oops in due categorie di errori
+
+- process-local error
+    - propagates only within the kernel context of a process
+    - e.g., kernel stack, function-local data
+    - errors can be removed by killing the faulty process
+- kernel-global error
+    - propagates to data shared among kernel contexts
+    - e.g., kernel states, global data, heap data
