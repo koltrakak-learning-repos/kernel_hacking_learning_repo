@@ -10,6 +10,7 @@
 #include <linux/sysfs.h>
 #include <linux/module.h>
 #include <linux/init.h>
+#include <uapi/asm-generic/errno-base.h>
 
 /*
  * This module shows how to create a simple subdirectory in sysfs called
