@@ -381,9 +381,14 @@ Poi, da dentro gdb:
 
 # ESERCIZIO DA SVOLGERE DOPO AVER STUDIATO IL SYSFS
 
-1. Inserire una eccezione in un punto del nostro modulo hello-world con sysfs. Deve essere un punto tale che si possa controllare da userspace l'istante in cui viene eseguita l'eccezione. Una possibilità è mettere l'eccezione nell'hook di show del file speciale.
+1. Inserire una eccezione in un punto del nostro modulo hello-world con sysfs. 
+	- Deve essere un punto tale che si possa controllare da userspace l'istante in cui viene eseguita l'eccezione. 
+	- Una possibilità è mettere l'eccezione nell'hook di show del file speciale.
 2. Scatenare bug e leggere OOPS
-3. Scrivere programma in C che apre un file e scatena l'OOPS. Controllare se il file rimane aperto o chiuso. Lo stato in cui va il sistema dovrebbe essere diverso da quello in cui va se si termina il programma violentemente, ma da userspace. Nel secondo caso dovrebbe avvenire una exit_files() e/o altro cleanup.
+3. Scrivere programma in C che apre un file e scatena l'OOPS. 
+	- Controllare se il file rimane aperto o chiuso. 
+	- Lo stato in cui va il sistema dovrebbe essere diverso da quello in cui va se si termina il programma violentemente, ma da userspace. 
+		- Nel secondo caso dovrebbe avvenire una exit_files() e/o altro cleanup.
 4. Ripetere, ma con OOPS scatenato dalla macro BUG()
 5. Ripetere, ma con OOPS scatenato da handler di timer
 
@@ -391,13 +396,18 @@ Nota sul punto 1
 - Se si inserisce l'eccezione nella funzione di init del modulo, allora l'OOPS è di fatto un panic.
 
 Nota sul punto 2
-Se provate poi a fare la rmmod del modulo dopo l'OOPS, il kernel si comporta in modo anomalo. La reazione più probabile è che il processo si blocchi indefinitamente. Se poi provate da un'altra shell ad eseguire lsmod, dovrebbe dare -1 come numero di utilizzatori del modulo. A quel punto un ulteriore tentativo di rimozione del modulo fallisce perché il modulo è considerato in uso (perché il contatore non è uguale è zero). Un'altra possibilità è che la prima rmmod funzioni, ma poi un nuovo caricamento del modulo fallisca. In sostanza, il kernel è entrato in uno stato incosistente.
+- Se provate poi a fare la rmmod del modulo dopo l'OOPS, il kernel si comporta in modo anomalo. 
+	- La reazione più probabile è che il processo si blocchi indefinitamente. 
+- Se poi provate da un'altra shell ad eseguire lsmod, dovrebbe dare -1 come numero di utilizzatori del modulo. 
+	- A quel punto un ulteriore tentativo di rimozione del modulo fallisce perché il modulo è considerato in uso (perché il contatore non è uguale è zero). 
+- Un'altra possibilità è che la prima rmmod funzioni, ma poi un nuovo caricamento del modulo fallisca. In sostanza, il kernel è entrato in uno stato incosistente.
 
 Note su punto 3
 - Se il programma scatena l'OOPS tramite una system("qualche comando") allora il programma NON viene ucciso.
 - Per verificare quali file sono aperti si può usare il comando lsof
 - Per contare quanti file sono aperti si può leggere il contenuto del file speciale /proc/sys/fs/file-nr
-- Dovreste scoprire che in ogni caso non rimane il file aperto. Quindi nessuna inconsistenza da questo punto di vista. 
+- Dovreste scoprire che in ogni caso  il file non rimane aperto. Quindi nessuna inconsistenza da questo punto di vista. 
+	- NB: killare un processo userspace immagino non sia problematico dato che il kernel una volta rilevato l'oops manda il segnale di kill al processo che tramite l'handler già registrato può effettuare le sue operazioni di cleanup specificate nel runtime
 
 Nota sul punto 5
 - Nonostante l'eccezione venga causata nell'handler di un interrupt, il kernel quasi sicuramente sopravvive. A morire è solo il processo che ha la sfortuna di essere in esecuzione sul core su cui viene eseguito l'handler dell'interrupt.
