@@ -1,0 +1,245 @@
+Guida generale allo sviluppo nel kernel, della Linux Foundation:
+https://training.linuxfoundation.org/training/a-beginners-guide-to-linux-kernel-development-lfd103/
+
+
+QUALITA' DEL CODICE
+
+Per riprendere l'argomento, potete partire dalle mie brevi note:
+https://algogroup.unimore.it/people/paolo/courses/programmazione_I/vecchie_edizioni/edizione_1920/materiale_1920/lezioni/Lez_12-Ingegneria_del_codice.pdf
+
+Per poi approfondire qui:
+https://www.kernel.org/doc/html/latest/process/coding-style.html
+
+Inoltre:
+https://artur-martsinkovskyi.github.io/2018/logical-fallacies-in-programming/
+
+---------------------------
+
+Ecco un esempio 'italiano' dell'importanza del fare bene le cose (durano nel tempo)
+
+https://www.moma.org/calendar/exhibitions/5032
+
+---------------------------
+
+
+CREAZIONE COMMIT
+
+Prima riga:
+<dove_agisce_la_modifica>: <cosa fa la modifica>
+
+block, bfq: boost performance by 800%
+
+-usate verbi, che descrivono l'azione del commit, ad esempio non va bene:
+block, bfq: performance boost by 800%
+
+In ogni caso, questo esempio di titolo può essere troppo generico. Meglio un titolo più tecnico, che spiega esattamente cosa fa il commit. Ad esempio:
+
+block, bfq: boost performance by avoiding device idling
+
+Lasciare una riga vuota dopo titolo
+
+Commit message:
+- contesto del problema
+- motivazione del commit
+- miglioramento/correzione apportata dal commit
+
+Il commit message è una delle cose più difficile da fare bene. Molti programmatori la sorvolano e lo scrivono male. Le loro patch vengono accettate lo stesso grazie alla autorevolezza del programmatore. Ma fanno un danno al sistema.
+
+A parte queste poche note, studiatevi con molto cura il documento:
+https://www.kernel.org/doc/html/latest/process/submitting-patches.html
+
+Fatto questo, un modo per imparare bene e' leggere altri commit di qualità'. Soprattutto, dovete individuare gli schemi di cui sopra in tali commit (caratteristiche del titolo, parti del commit message come descritte sopra). Un esempio di commit scritti con attenzione a questi dettagli sono proprio i commit dello scheduler bfq.
+
+---------------------------
+
+QUALITA' DEL MESSAGGIO DI COMMIT
+
+https://github.com/RomuloOliveira/commit-messages-guide
+
+https://github.com/torvalds/subsurface-for-dirk/blob/a48494d2fbed58c751e9b7e8fbff88582f9b2d02/README#L88
+
+----------------------------
+
+REVISIONE DEL COMMIT MESSAGE E DEI COMMENTI
+
+Data l'importanza e la difficoltà del commit message, è molto importante anche che venga revisionato. L'ideale è avere un lettore attento, interessato e molto onesto che lo legga. E' fondamentale che, non appena ravvisa qualcosa di un po' più faticoso da capire, non chieda spiegazioni, ma si limiti a segnalarlo. Lo scopo non è aiutare il lettore a capire, ma aiutare lo scrittore a migliorare. Spesso il lettore non vi aiuta veramente perché ha paura di fare brutta figura dicendo che non ha capito qualcosa.
+
+Come mai il lettore riesce a vedere cose che voi non vedete? Per via della direzione del processo. Il contenuto del commit message si muove prima dalla vostra mente al commit. In questo processo, voi avete GIA' chiaro quello di cui state parlando. Quando poi rileggete il commit message, voi, più o meno inconsciamente, riconoscete quell che avete già pensato in quello che avete scritto. Ma quello che avete già pensato, è GIA' nella vostra mente.
+
+Invece un lettore NON SA quello che c'è nella vostra mente. Lui vede SOLO quello che avete scritto. Quindi lui ha molte meno possibilità di compensare quello che manca nel documento con quello che sa già.
+
+Se non avete un lettore, allora dovete diventarlo voi. C'è chi ha la magnifica dote di saper rileggere un documento con gli occhi di un lettore. Ma è molto raro. Allora, per diventare il lettore, un trucco molto efficace è mettere una distanza tra voi e il documento, attraverso il tempo. Ossia, una volta scritto il messaggio, fate passare il numero di giorni che sapete essere sufficiente per voi per scordarvelo quasi del tutto. A quel punto tornate a rileggerlo. E non appena avete anche solo il minimo sentore di una frase o un paragrafo che vi hanno fatto fare una fatica anche solo un po' 'strana' nel ritornare a quello che già sapete, non perdonatelo. Avete avuto il segnale che lì c'è qualcosa che non va, e sapete che lo dovete migliorare.
+
+---------------------------
+
+CONTROLLO DEL COMMIT
+
+./scripts/checkpatch.pl -g <hash commit>
+oppure, se volete controllare una patch
+./scripts/checkpatch.pl <file contenente la patch>
+
+-----------------------------
+
+QUANDO SOTTOMETTERE PATCH PER IL KERNEL
+
+Da email di Jens Axboe, incavolato con me perché avevo tirato la corda per l'ennesima volta:
+
+Patches look fine to me. You are in fact several weeks late for 4.19, I
+need to have anything that's going in to 4.19 by 4.18-rc6 or 4.18-rc7 time
+(depending on whether we have an -rc8 or not). This is to ensure that it
+gets plenty of time in linux-next as well. I've queued up patches this
+time (since they were small), but please send them in in due time next
+time.
+
+-----------------------------
+
+SOTTOMISSIONE COMMIT
+
+1. Creazione patch
+git format-patch --subject-prefix="<prefisso>" <hash commit padre>
+
+Esempi:
+git format-patch --subject-prefix="PATCH" HEAD~
+git format-patch --subject-prefix="PATCH BUGFIX" HEAD~
+git format-patch --subject-prefix="PATCH IMPROVEMENT" HEAD~
+
+Spesso è conveniente associare una cover letter alla patch:
+git format-patch --cover-letter --subject-prefix="<prefisso>" <hash commit padre>
+git genererà una cover letter, in cui dovrete solo aggiungere subject e corpo della lettera
+
+2. Controllo destinatari a cui spedire
+
+./scripts/get_maintainer.pl <patch>
+
+Inoltre spedite a tutte le persone che pensate possano essere interessate
+
+2. Spedizione patch
+<ATTENZIONE, GIT-SEND-EMAIL E' UN PACCHETTO A PARTE: git-email>
+
+git send-email <cover letter, se c'è> <patch 1> <patch 2> ... -to <indirizzo email> -to <indirizzo email> ... -cc <indirizzo email> -cc <indirizzo email>
+
+Esempio:
+git send-email 00* -to "Jens Axboe <axboe@kernel.dk>" -cc linux-block@vger.kernel.org -cc linux-kernel@vger.kernel.org
+
+-------------------------------
+
+CONFIGURAZIONE GIT SEND-EMAIL
+
+Configurare git send-email, affinché spedisca correttamente delle email, può non essere banale. Eccovi un elenco di configurazioni appropriate, per i provider di posta più comuni, da inserire nel file
+~/.gitconfig, o da configurare attraverso il comando git config. NOTA: nel file .gitconfig potete creare una sezione [sendemail] anziché ripetere ogni volta sendemail nelle seguenti opzioni.
+
+@outlook.it:
+sendemail.smtpencryption = tls (oppure ssl)
+sendemail.smtpserver = smtp.live.com (oppure provate smtp-mail.outlook.com)
+sendemail.serverport = 587 (oppure 25)
+sendemail.smtpuser=<indirizzo posta>
+
+@gmail:
+sendemail.smtpencryption=ssl
+sendemail.smtpserver=smtp.gmail.com
+sendemail.smtpserverport=465
+sendemail.smtpuser=<indirizzo posta>
+
+@aruba
+sendemail.smtpencryption = ssl
+sendemail.smtpserver = smtps.aruba.it
+sendemail.smtpuser = <indirizzo posta>
+sendemail.smtpserverport = 465
+
+Se ancora non funziona, bisogna abilitare app meno sicure su gmail, come spiegato qui:
+
+https://support.google.com/accounts/answer/6010255?hl=it
+
+In particolare, selezionare il link di "opzione 2":
+sezione "App meno sicure" di Account personale.
+
+-------------------------------
+
+NOTE SU PATCH INLINE
+
+git send-email crea patch cosiddette inline, ossia email in cui la patch non è in un allegato, ma è l'email stessa. Questa soluzione è perfetta per la revisione, perché si riescono ad inserire poi commenti inline nella propria revisione, senza alcuna difficoltà.
+
+E' però un formato che può dare problemi nel caso proviate ad applicare una patch a partire da un'email, ossia a salvare l'email e poi applicarla come patch. Infatti, i client di posta spesso si divertono a modificare in modi sottili la formattazione delle email che ricevono, corrompendo di fatto la patch.
+
+Se vi si verificano questi problemi su patch spedite pubblicamente sulle mailing list del kernel, una soluzione che funziona è
+https://patchwork.kernel.org/
+Si tratta di un archivio in cui vengono inserite automaticamente tutte le patch che vengono spedite su tali mailing list. Cercate il messaggio contenente la patch che vi interessa, quindi scaricate la patch direttamente da patchwork.
+
+Se invece si tratta di una patch speditavi privatamente da un collega o simili, la soluzione più semplice è chiedere al collega di spedire la patch come allegato compresso. Con questa soluzione, si impedisce al client di posta di effettuare qualsiasi corruzione della patch. Attenzione che non basta che sia semplicemente un allegato, perché, se l'allegato è un file di testo, i client spesso corrompono il testo contenuto nell'allegato.
+
+---------------------------------
+
+CONSIGLI SU SOLLECITO DOPO LA SOTTOMISSIONE DI UNA PATCH
+
+Se il maintainer non risponde, e non abbiamo elementi specifici per decidere quando sollecitarlo, di norma due o tre settimane possono essere un tempo ragionevole.
+
+In quanto al messaggio da usare per un sollecito, di norma conviene usare il massimo del tatto e della gentilezza, per tanti motivi. Inoltre tipicamente è meglio essere informali. Quindi una domanda del tipo "per caso hai avuto modo di guardarci?" può essere una buona idea.
+
+Ossia, in inglese:
+Hi Jens,
+have you had time to look into this?
+
+Thanks,
+<nome>
+
+può essere sufficiente. Dati questi consigli, usate però il linguaggio e le formule con cui vi sentite a vostro agio, perché alla fin fine gli autori dell'email sarete voi!
+
+-----------------------------------
+
+INTERAZIONE CON LA COMUNITA'
+
+Alcuni degli spunti migliori direi che siano riassunti in questo articolo, apparentemente relativo ad un argomento diverso:
+
+https://nextbigideaclub.com/facts-dont-change-peoples-minds-heres/16242/
+
+Quest'altro articolo invece può' aiutarvi a capire come mai a volte "non capiscono":
+https://theconversation.com/why-you-stink-at-fact-checking-93997
+
+Infine questo articolo può farvi acquisire una 'saggezza' ancora maggiore:
+https://it.wikipedia.org/wiki/Effetto_Dunning-Kruger
+
+Se la conversazione diventa difficile:
+https://medium.com/s/please-advise/the-essential-guide-to-difficult-conversations-41f736e63ccf?
+
+Se invece volete/dovete lavorare su voi stessi:
+https://medium.com/better-humans/the-falsification-mindset-how-to-change-your-own-mind-db4a0a9ae7f2
+
+-------------------------------------
+
+INVIARE NUOVA VERSIONE DI UNA SERIE DI PATCH
+
+Capita di dover inviare una nuova versione di una patch o di una serie di patch, a seguito dei commenti ricevuti. Tipicamente si utilizza la semplice convenzione di lasciare il subject della patch inalterato, a parte aggiungere un V2, V3, V4 o così via. Oppure, se vi piace di più, v1, v2, v3, ... Ad esempio:
+[PATCH BUGFIX V2] ....
+
+-------------------------------------
+
+SCRIVERE LE DIFFERENZE QUANDO SI MANDA UNA NUOVA VERSIONE
+
+Quando si invai una nuova versione di una patch o di una serie di patch, segnalare le differenze rispetto alla versione precedente. Se la patch o la serie è accompagnata da una cover letter, allora potete banalmente sfruttare la cover letter. Altrimenti potete scrivere tali differenze subito sotto i tre trattini presenti nella patch. Eccovi un esempio:
+
+From a1b73a9228edbd30f098c6558f4b84cd0e77d77e Mon Sep 17 00:00:00 2001
+From: Paolo Valente <paolo.valente@linaro.org>
+Date: Thu, 13 Dec 2018 16:07:13 +0100
+Subject: [oe][meta-oe][PATCH V2] s-suite: push SRCREV to version 3.0
+
+Signed-off-by: Paolo Valente <paolo.valente@linaro.org>
+---
+Changes v1 -> v2:
+ - Removed useless psmisc dep
+ - Fixed stale install commands
+
+ meta-oe/recipes-benchmark/s-suite/s-suite_git.bb | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/meta-oe/recipes-benchmark/s-suite/s-suite_git.bb b/meta-oe/recipes-benchmark/s-suite/s-suite_git.bb
+index 77d172814..8bd0afc49 100644
+--- a/meta-oe/recipes-benchmark/s-suite/s-suite_git.bb
++++ b/meta-oe/recipes-benchmark/s-suite/s-suite_git.bb
+@@ -2,7 +2,7 @@ SUMMARY = "Small collection of benchmarks for storage I/O"
+ LICENSE = "GPLv2"
+ LIC_FILES_CHKSUM = "file://COPYING;md5=b529aaa6a0c50f15d29f89609b5c22f3"
+
+-SRCREV = "79698f645bfb28d0d966484ddad3a1efb562246d"
++SRCREV = "e2727f70ed79b5461689c062a4a66a87f1adb4ce"
+
+...

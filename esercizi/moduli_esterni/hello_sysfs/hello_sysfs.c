@@ -9,16 +9,23 @@ MODULE_DESCRIPTION("hello sysfs");
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Kevin Koltraka");
 
+static int integer = 0;
+
 static ssize_t foo_show(struct kobject *kobj, const struct kobj_attribute *attr,
 			char *buf)
 {
-	return sysfs_emit(buf, "hello world from sysfs\n");
+	return sysfs_emit(buf, "hello world from sysfs. Variable: %d\n", integer);
 }
 
 static ssize_t foo_store(struct kobject *kobj, const struct kobj_attribute *attr,
 			 const char *buf, size_t count)
 {
-    pr_alert("hello_sysfs: %s", buf);
+	int ret = kstrtoint(buf, 10, &integer);
+	if (ret < 0)
+		return ret;
+
+    pr_alert("hello_sysfs: la variable ora vale: %d\n", integer);
+
 	return count;
 }
 

@@ -1,0 +1,415 @@
+PROBLEMI CON CGROUPS-V2
+
+Un controller ti tipo cgroups-v2 non si attiva se il suo corrispondente controller in cgroups-v1 è già attivo. Per scoprire cosa c'è di attivo, potete partire dalla semplice invocazione del comando mount. Per disattivare controller di tipo cgroups-v1 basta eliminare la corrispondente directory. A volte però  controller cgroups-v2 continuano ad avere problemi anche dopo che i loro corrispettivi in v1 sono stati disattivati. Allora è più conveniente che i controller di tipo v1 non vengano mai attivati. In merito, systemd spesso attiva tali controller v1 al boot. Un modo per evitare che vengano attivati al boot, è passare il parametro systemd.unified_cgroup_hierarchy nella riga di comando di avvio del kernel. Dettagli su systemd qui:
+https://www.freedesktop.org/software/systemd/man/systemd.html
+
+PROBLEMI DI PRESTAZIONI CAUSATI DA I/O CONTROLLER CHE RIMANGONO ATTIVI INAVVERTITAMENTE
+
+Attenzione al fatto che può capitare che qualche I/O controller (throttling, latency, weight) rimanga attivo senza che ne siamo consapevoli. Questo può causare comportamenti inattesi e molto difficili da diagnosticare da parte degli I/O scheduler.
+
+COMANDI PER AVERE INFORMAZIONI SULL'HW
+
+https://www.binarytides.com/linux-commands-hardware-info/
+
+--------------------------------------
+
+UTILIZZO E RICOMPILAZIONE DI BFQ COME MODULO
+
+E' estremamente più pratico utilizzare e ricompilare BFQ come modulo.
+
+Se bfq non è compilato come modulo, modificate il config del kernel, utilizzando ad esempio "make menuconfig", dopodiché ricompilate, installate e riavviate il kernel.
+
+Se bfq è compilato come modulo, per vedere lo scheduler, dovete caricare il rispettivo modulo:
+sudo modprobe bfq_iosched
+
+Per toglierlo:
+sudo modprobe -r bfq_iosched
+
+Per selezionare bfq per un dato dispositivo: eseguire, da root:
+echo bfq > /sys/block/<nome_dispositivo>/queue/scheduler
+oppure, se non si è root
+echo bfq | sudo tee /sys/block/<nome_dispositivo>/queue/scheduler
+
+Per controllare:
+cat /sys/block/<nome_dispositivo>/queue/scheduler
+
+Una volta selezionato bfq, avete i suoi parametri nella cartella /sys/block/<nome_dispositivo>/queue/iosched
+
+NOTA: anche se il modulo non è caricato, e quindi bfq non appare nella lista degli scheduler, potete comunque selezionare bfq. Questo comporterà il caricamento automatico del modulo bfq-iosched.
+
+Il grande vantaggio di avere bfq caricato come modulo si evidenzia nel caso in cui lo si modifichi. In tal caso, per poter utilizzare la versione modificata, non è più necessario ricompilare e reinstallare tutto il kernel. Basta solo ricompilare e reinstallare i moduli. I comandi sono
+
+make -j<NUM_PROC+1> O=<cartella_di_build> modules
+sudo make O=<cartella_di_build> modules_install
+
+Fatto questo,
+1. assicuratevi che bfq non sia più selezionato come I/O scheduler per alcun dispositivo (altrimenti il seguente comando fallisce).
+2. Rimuovete il modulo bfq-iosched
+sudo modprobe -r bfq-iosched
+3. Ricaricate il modulo bfq-iosched, oppure semplicemente selezionate direttamente bfq come scheduler per il vostro dispositivo di interesse
+
+----------------------------------
+
+TEST DI COMPILAZIONE VELOCE DI MODULI
+
+make M=<cartella in cui ci sono i file di cui volete testare la ricompilazione>
+
+Esempio:
+make -j 3 O=~/linux-build M=block
+
+La compilazione con opzione M=<cartella> è talmente riduttiva che non esegue neanche la generazione di eventuali file generali, che potrebbero essere necessari per compilare correttamente il contenuto della cartella scelta. In tal caso la compilazione fallisce. Inoltre non tiene conto di eventuali cambiamenti del file .config. Per ottenere una compilazione coerente, potete usare quest'altra forma, più lenta ma più generale:
+
+make <cartella in cui ci sono i file di cui volete testare la ricompilazione>
+Esempio:
+make -j 3 O=~/linux-build block
+
+Una volta generati i file generali, si può utilizzare la forma M=<cartella> senza problemi.
+
+-----------------------------------
+
+FINTA COMPILAZIONE
+
+Se si cambia branch, git aggiorna i timestamp di tutti i file che cambiano, usando come nuovo timestamp l'ora corrente. Questo implica che, anche se ci si sposta da un branch con file recenti, ad un branch con file meno recenti, e si ha una cartella di build già contenente i file oggetto per la versione meno recente dei file sorgente (tale cartella potrebbe anche coincidere con la cartella stessa dei sorgenti, nel caso non si usi una cartella di build distinta), sarà comunque necessario ricompilare tutti i file che sono cambiati.
+
+In questo caso, se si è sicuri che il contenuto della cartella di build sia a posto, si può usare il seguente trucco
+
+make -t O=<cartella_di_build>
+
+Poi, per le cartelle contenenti file che invece si sa che potrebbero essere più recenti dei file oggetto nella cartella di build, si può aggiornare manualmente tali file eseguendo il make (vero) a parte
+
+make O=<cartella_di_build> <cartella_da_compilare_veramente>
+oppure
+make O=<cartella_di_build> M=<cartella_da_compilare_veramente> # nel caso di soli moduli
+
+Questo trucco purtroppo non funziona se CONFIG_STACK_VALIDATION è abilitata, perché in tal caso parte il tool objtool, che è incompatibile con questo trucco.
+
+-----------------------------------
+
+ACCESSO REMOTO AD UN GUEST
+
+Vi consiglio vivamente di interagire con le vostre macchine virtuali attraverso ssh.
+
+Per farlo, dovete avere il l'emulatore di macchine virtuali con rete interna emulata, ed il pacchetto openssh-server installato sul guest.
+
+Per esempio, su VirtualBox, dovete
+1) Andare su Preferenze->Rete->Reti solo host ed aggiungere una scheda virtuale
+2) Nella impostazioni della macchina virtuale, andare su Rete ed aggiungere una seconda scheda di tipo "solo host". Vi verrà proposta proprio la scheda virtuale che avete creato nel passaggio precedente
+
+Poi dovete ovviamente scoprire l'indirizzo di rete del guest, all'interno della rete emulata nell'host. Di norma basta un ifconfig, oppure un ip addr show, da dentro il guest. Supponiamo che ad esempio sia: 10.0.2.15, dall'host fate:
+ssh nome_utente@10.0.2.15
+
+Vi può tornare molto utile usare ssh-copy-id, così da non dover poi dare la passwd ogni volta. Se ssh-copy-id non va perché non avete una chiave nell'host, allora generatela invocando semplicemente ssh-keygen.
+
+----------------------------
+
+CONTROLLI IN KERNEL
+
+Il kernel è in grado di effettuare dei controlli automatici di consistenza e correttezza di operazioni e dati. Vi può essere molto utile attivare alcuni o molti di questi controlli, a seconda del tipo di modifiche che fate nel kernel. Eccovi quelli che uso più di frequente.
+
+Trovate tutti questi controlli dentro "Kernel Hacking" nel menuconfig.
+
+ATTENZIONE: NON ATTIVATE I SEGUENTI CONTROLLI IN UN KERNEL CON CUI VOLETE EFFETTUARE MISURE DI PRESTAZIONI, PERCHE' ALCUNI DEI SEGUENTI CONTROLLI POSSONO RENDERE L'ESECUZIONE DEL KERNEL SIGNIFICATIVAMENTE PIU' PESANTE! VICEVERSA, SE CON UN DATO KERNEL OTTENETE PRESTAZIONI INSPIEGABILMENTE PIU' BASSE DEL PREVISTO, RICORDATEVI DI CONTROLLARE CHE NON SIA ABILITATO QUALCUNO DEI SEGUENTI CONTROLLI.
+
+Memory Debugging -> SLUB debugging ON by default
+
+Memory Debugging -> Kernel Memory Leak detector
+Attenti al fatto che, se gli si riempie il buffer, kmemloeak si disattiva al boot, e poi non segnala alcun errore, anche se ce ne sono. Per controllare se tutto è andato bene al boot, cercate kmemleak in dmesg.
+
+Memory Debugging -> KASan: runtime memory debugger
+Uno degli errori importanti controllati da KASan è lo use-after-free (UAF).
+(questo può' essere pesante per le prestazioni, ho il sospetto che rallenti anche il tempo di compilazione e faccia aumentare di molto le dimensioni dei file oggetto)
+
+Debug OOPS, Lockups and Hangs -> Detect Hard Lockups
+
+Debug OOPS, Lockups and Hangs -> Detect Hung Tasks
+
+Lock Debugging (spinlocks, mutexes, etc...) -> Lock debugging: prove locking correctness
+
+Debug Kernel Data Structures -> Debug linked list manipulation
+
+Trigger a BUG when data corruption is detected
+
+----------------------------------------------------------------------------
+
+ATTIVAZIONE/DISATTIVAZIONE MESSAGGI E CONTROLLI DI CONSISTENZA IN BFQ
+
+Nella versione di sviluppo di BFQ è possibile spegnere o accendere i messaggi di log ed i controlli di consistenza.
+
+Per spegnerli, basta aggiungere la seguente riga in bfq-iosched.h:
+#define CONFIG_BFQ_MQ_NOLOG_BUG_ON
+
+Come in controlli nel kernel, anche i messaggi di log ed i controlli in bfq rallentano tantissimo l'esecuzione di BFQ. Vanno quindi disattivati se si vogliono effettuare misure di prestazioni.
+
+-------------------------------
+
+KERNEL PROFILING
+
+Per profilare può essere importante mantenere la cpu a velocità costante e senza idle, oppure essere consapevoli dello stato in cui la CPU si trova.
+
+Se necessario, un tool che vi permette di controllare lo stato della CPU è cpupower. Per un kernel custom è quasi sicuro che dobbiate ricompilarlo (ricordate vi che è molto probabile che dovrete ricompilarlo ogni volta che dovrete utilizzarlo con un kernel diverso). Trovate tutte le istruzioni qui:
+https://github.com/torvalds/linux/tree/master/tools/power/cpupower
+
+In particolare, affinché la compilazione non fallisca, è necessario che abbiate installato pciutil-dev o pciutil-devel, a seconda della vostra distribuzione.
+
+Se quando provate ad invocare cpupower vi da il seguente errore:
+cpupower: error while loading shared libraries: libcpupower.so.0: cannot open shared object file: No such file or directory
+
+allora vuol dire semplicemente che la regola di installazione ha messo le librerie nel posto sbagliato. Una soluzione può essere:
+
+sudo ln /usr/lib64/libcpupower.so.0.0.1 /usr/lib/libcpupower.so.0
+
+o qualcosa di simile, in base a dove vi ha messo la libreria la regola di installazione. Ricordatevi di RIPETERE questo passaggio se ricompilate il tool!!!
+
+Per portare la CPU al massimo, eseguite
+cpupower frequency-info
+
+E controllate la frequenza minima e massima della CPU. Quindi eseguite:
+sudo cpupower frequency-set -g performance -d <freq massima> -u <freq massima>
+Per esempio, se la frequenza massima è 3.50GHz, allora scrivete
+sudo cpupower frequency-set -g performance -d 3.50GHz -u 3.50GHz
+
+Poi bisogna evitare gli idle state, perché potrebbero comportare uno spegnimento della cache, con conseguente invalidazione del suo contenuto:
+sudo cpupower idle-set -D 0 # cautela !!!!!!!!!
+
+E' molto importante che ripristinate il funzionamento normale non appena il test è finito:
+sudo cpupower frequency-set -g powersave -d <freq minima>
+Ad esempio:
+sudo cpupower frequency-set -g powersave -d 800MHz
+
+E poi, per ripristinare gli idle state:
+sudo cpupower idle-set -E
+
+Quindi, per le prossime tecniche di compilazione, assumiamo che abbiate sotto controllo la frequenza della CPU e gli stati di idle.
+
+
+Altro elemento fondamentale per il profiling è controllare lo stato del componente che ci interessa profilare. Tipicamente si cercano due estremi:
+- componente quasi sempre scarico
+- componente molto carico
+
+Un esempio, per bfq, è tra avere al più una, oppure magari anche al più due o tre, code attive, ed avere tante code attive. Per il secondo caso, bisogna stare molto attenti, perché il numero di code che generano I/O deve essere sufficientemente alto da compensare il numero di richieste che possono essere accodate nel dispositivo, altrimenti le richieste semplicemente passano dentro bfq e se ne vanno direttamente nel dispositivo, senza che molto code rimangano attive contemporaneamente.
+
+Un modo facile per capire se il drive è saturato è usare iostat -x, e confrontare il campo  aqu-sz con la queue depth del dispositivo. Se aqu-sz è minore, allora il dispositivo sta drenando tutte le richieste e lasciando lo scheduler sempre vuoto.
+
+
+-------------------------------
+
+DETTAGLI SUI DISPOSITIVI A BLOCCHI
+
+lsblk -o NAME,FSTYPE,LABEL,MOUNTPOINT,SIZE,MODEL
+
+-------------------------------
+
+KERNEL PROFILING CON PERF
+
+Se state eseguendo un kernel custom, è poco probabile che la versione i perf che avete eventualmente già installata nel sistema sia compatibile con tale kernel. Vi tocca pertanto compilarvi perf per il vostro kernel.
+
+Trovate i sorgenti di perf di cui avete bisogno direttamente nell'albero del kernel.
+
+Per poter compilare perf, dovete avere i seguenti pacchetti installati
+sudo apt install flex bison elfutils libdw-dev
+
+Le istruzioni per compilare perf sono:
+cd <path all'albero dei sorgenti del kernel>/tools/perf
+make [O=<builddir>] # se usate una builddir, *non riusate* quella di un kernel!
+sudo make [O=<builddir>] install
+
+Le regole di installazione metteranno l'eseguibile di perf qui:
+~/bin/perf 
+
+Se necessario, abilitare le opzioni relative a perf nel kernel. Un kernel stock dovrebbe già avere tutte le opzioni necessarie abilitate. Quindi, se avete generato il config con lo script streamline, dovreste ritrovarvi tutte le opzioni abilitate.
+
+Una prima cosa che potete fare con perf è ottenere delle statistiche generali:
+~/bin/perf stat -B <riga di comando da eseguire>
+
+Invece, per indagini più accurate possono essere molto convenienti i flamegraph, generabili con questo tool:
+https://github.com/brendangregg/FlameGraph
+
+Istruzioni su come generare un report ed il corrispondente flamegraph qui:
+http://www.brendangregg.com/FlameGraphs/cpuflamegraphs.html
+
+Può non essere banale far funzionare correttamente la catena di istruzioni necessaria per arrivare ad un flamegraph. Ecco una sequenza che dovrebbe funzionare, per prendere tutti gli eventi che stanno accadendo nel sistema per N secondi:
+
+sudo /home/paolo/bin/perf record -a -g --call-graph dwarf -- sleep N
+sudo /home/paolo/bin/perf script | ../FlameGraph/stackcollapse-perf.pl > out.perf-folded
+sudo ../FlameGraph/flamegraph.pl out.perf-folded > perf-kernel.svg
+
+Se volete isolare la sola attività del kernel:
+sudo /home/paolo/bin/perf record -e cycles:k -a -g --call-graph dwarf -- sleep 5
+
+Ecco un esempio di riga di comando che fa un po' tutto:
+sudo rm *perf* ; sudo /home/paolo/bin/perf record -e cycles:k -a -g --call-graph dwarf -- sleep 5 && sudo /home/paolo/bin/perf script | ../FlameGraph/stackcollapse-perf.pl > out.perf-folded && sudo ../FlameGraph/flamegraph.pl out.perf-folded > perf-kernel.svg
+
+-----------------------
+
+KERNEL PROFILING CON eBPF/BCC
+
+Installazione di BCC:
+https://github.com/iovisor/bcc/blob/master/INSTALL.md
+
+
+La cartella con i sorgenti *deve* esistere nel percorso in cui si trovava quando il kernel è stato installato, e deve contenere gli stessi header file che conteneva quando il kernel è stato installato.
+
+Nelle misure ci sono dei valori spuri. Per abbatterli quasi completamente, cercate di avere un count di almeno un milione.
+
+Uno dei tool è funclatency, che permette di misurare la durata di funzioni nel kernel. Però ha una precisione del microsecondo, ossia misura le durate con un errore dell'ordine del microsecondo. Quindi non è adatto per funzioni che durano meno. La soluzione più pratica si rivela essere la semplice strumentazione del codice riportata sotto.
+
+-------------------
+
+STRUMENTAZIONE DEL CODICE: MISURA DELLA DURATA DELLE FUNZIONI
+
+All'inizio di ogni funzione da misurare:
+	u64 start_ns = ktime_get_ns();
+
+In TUTTI i punti di uscita della funzione:
+	trace_printk("duration: %llu\n", ktime_get_ns() - start_ns);
+
+Poi, per valutare le misure per una data funzione:
+sudo cp /sys/kernel/debug/tracing/trace . && egrep "<nome-funzione>.*duration" trace | awk '{print $NF}' | <percorso per la S benchmark suite>/utilities/calc_avg_and_co.sh 95
+
+NOTA: Fate molta attenzione alle funzioni che prendono dei lock, perché la durata totale che misurate potrebbe essere fortemente influenzata dal tempo di attesa per i lock.
+
+------------------------
+
+STRUMENTAZIONE DEL CODICE: TRACING
+
+Tool come perf o eBPF/BCC sono di norma molto utili nella fase di 'avvicinamento' al problema che si vuole risolvere. Una volta individuato chiaramente il problema, conviene quasi sempre passare alla strumentazione del codice, in special modo al tracing:
+https://en.wikipedia.org/wiki/Instrumentation_(computer_programming)
+
+Un trucco particolarmente efficace con l'I/O è il tracing attraverso le funzioni trace_printk: i messaggi finiranno direttamente nella traccia generata dal blk tracer, permettendo di correlare l'I/O con le informazioni aggiuntive che si vogliono monitorare.
+
+-------------------
+
+
+STRUMENTAZIONE DEL CODICE RELATIVO ALL'I/O A PARTIRE DA LIVELLI SUPERIORI ALLO SCHEDULER
+
+Nel caso di processi il cui carico di I/O è dato principalmente da molte read o write esplicite, si può usare perf per scoprire di quali operazioni si tratta esattamente, per poi andare a lavorare direttamente su tali funzioni. Queste ultime dovrebbero trovarsi principalmente in fs/read_write.c
+
+Nel caso di processi il cui carico di I/O è dato principalmente da dei page fault su file memory-mapped (carico tipico di una applicazione che parte), è __do_page_cache_readahead.
+
+Un'altra funzione spesso invocata è filemap_fault in mm/filemap.c, che a sua volta può invocare __do_page_cache_readahead.
+
+Scendendo invece più in basso, troviamo la submit_bio, in block/blk-core.c, che a sua volta fa I/O attraverso generic_make_request. In merito, il tempo di esecuzione della generic_make_request è una misura molto efficace delle latenze di I/O presenti nel kernel, sopra il block layer; ossia delle latenze non dovute direttamente al vero e proprio I/O fisico col dispositivo di storage.
+
+--------------------
+
+VISUALIZZAZIONE DI FILE E RICERCHE NEI SORGENTI LINUX
+
+Uno dei metodi più efficaci e veloci è utilizzare:
+http://elixir.free-electrons.com/linux/latest/source
+
+--------------------
+
+RICERCA FUNZIONI EFFETTIVAMENTE INVOCATE IN PRESENZA DI PUNTATORI A FUNZIONE
+
+Spesso nel kernel si ritrova il polimorfismo implementando attraverso puntatori a funzione.
+
+Ad esempio:
+ret = mapping->a_ops->readpages(filp, mapping, pages, nr_pages)
+
+Qual è la funzione effettivamente invocata?
+
+I classici strumenti per la visualizzazione e la ricerca nel codice non aiutano. Se si cerca readpages, difficilmente si troverà qualcosa.
+
+Ecco invece un trucco che spesso funziona: cercare tutti i punti in cui i campi di nome readpages vengono inizializzati.
+
+Per farlo, si può utilizzare il comando:
+egrep -r "readpages.*=" *
+
+Oppure, se si vuole essere più selettivi:
+egrep -r "\.readpages.*=" *
+oppure
+egrep -r "\->readpages.*=" *
+(una delle due ricerche avrà quasi certamente successo)
+
+Il passo successivo è capire quale possa essere l'inizializzazione appropriata per il proprio sistema, da cui deduciamo qual è la funzione effettivamente invocata. In caso di dubbio, del semplice tracing può aiutare nuovamente.
+
+----------------------
+
+SCOPERTA DELLA CATENA DI CHIAMATE CHE PORTA AD UNA FUNZIONE
+
+Si possono utilizzare due trucchi semplici per scoprire tale catena.
+
+Uno è inserire l'invocazione di una dump_stack() nella funzione.
+
+Questa soluzione vi da il problema di generare eventualmente troppi messaggi.
+
+Un alternativa, per evitare questo problema, è usare una WARN_ONCE nella funzione.
+
+Si tratta di una macro così definita:
+#define WARN_ONCE(condition, format...)
+
+Se condition è vera, stampa quanto riportato nei parametri successivi, con la sintassi e semantica di una printf.
+
+Quindi, ad esempio,
+WARN_ONCE(true, "incorrect cpu parameter %d", cpu);
+
+Dopo aver stampato il messaggio una volta, la WARN_ONCE non stamperà più nulla, anche se dovesse essere eseguita di nuovo (con la condizione vera). Questo è comodo per funzioni che sono invocate ad altissima frequenza.
+
+Se invece si teme che la funzione potrebbe essere raggiunta da diversi percorsi, allora la WARN_ONCE non va ovviamente più bene, perché ne mostrerà al più uno. In tale caso, potreste usare la WARN:
+#define WARN(condition, format...)
+che stamperà il messaggio ogni volta che verrà invocata con condition vera (equivalente quindi al dump_stack()).
+
+Per evitare il problema di una esplosione di messaggi, in questo caso potreste utilizzare un trucco di questo tipo:
+
+funzione_sotto_esame(...)
+{
+	static unsigned long last_warn;
+
+	...
+
+	if (time_is_before_jiffies(last_warn + HZ/10) // stampa al più ogni decimo di secondo
+	{
+		WARN(true, "messaggio", ...); // oppure dump_stack()
+		last_warn = jiffies;
+	}
+	...
+}
+
+----------------------
+
+SCOPERTA DELLA CAUSA DEL RITARDO INSOLITO DI UNA QUALCHE OPERAZIONE
+
+Partire dal misurare il tempo di esecuzione del codice che precede tale operazione, all'interno della funzione che contiene tale operazione. Per farlo, strumentare la funzione come segue:
+
+funzione_contenente_operazione()
+{
+	u64 start_ns, duration;
+
+	...
+	start_ns = ktime_get_ns();
+
+	<codice che precede l'operazione>
+
+	duration = ktime_get_ns() - start_ns;
+	if (duration >= 10000) // o qualsiasi soglia oltre la quale la durata è eccessiva
+		trace_printk("duration: %llu\n", duration);
+	...
+}
+
+Eseguire con le tracce accese, e controllare la traccia. Il vantaggio dell'uso di trace_printk è che si ottengono le informazioni del tempo di esecuzione combinate con i log del componente sotto esame (ad esempio lo scheduler BFQ). Se invece, per qualsiasi motivo, è necessario che i tempi siano inseriti nel kernel log, sostituire trace_printk con pr_crit.
+
+Se il codice che precede l'operazione impiega effettivamente un tempo molto alto, allora, o si riesce a capire perché dal codice stesso, oppure, per ciascuna funzione invocata da tale codice, bisogna misurarne la durata, con la stessa tecnica vista sopra. Ossia, per ciascuna funzione sospetta, si può modificare la strumentazione come segue:
+
+funzione_contenente_operazione()
+{	
+	...
+	start_ns = ktime_get_ns();
+
+	<invocazione funzione sospetta>
+
+	duration = ktime_get_ns() - start_ns;
+	if (duration >= 10000) // o qualsiasi soglia oltre la quale la durata è eccessiva
+		trace_printk("duration: %llu\n", duration);
+	...
+}
+
+Questo passo ci permette necessariamente di individuare la funzione colpevole, dopodiché ripetiamo gli stessi passi di sopra, ma dentro la funzione colpevole, fino a trovare ulteriori funzioni colpevoli lungo la catena di invocazioni; e così via fino a trovare necessariamente il punto del codice che causa il ritardo.
+
+Se, invece, il codice che precede l'operazione NON impiega un tempo eccessivo, allora la causa del ritardo dell'operazione è che la funzione stessa viene invocata con ritardo. Per trovare la causa del problema in questo caso, bisogna procedere nel verso opposto, ossia risalendo lungo le funzioni invocanti. Per scoprire quali sono tali funzioni, si può utilizzare la tecnica descritta nella precedente nota (o precedere manualmente, tramite, per esempio, lxr). Per ciascuna delle funzioni invocanti, ripetere la procedura di strumentazione, per cercare il pezzo di codice che contiene il ritardo.
+
+A differenza del caso in cui si cerca nelle funzioni invocate, può succedere che nessuna delle funzioni invocanti contenga tale ritardo. Per scoprirlo rapidamente, senza dover controllare ciascuna funzione, vi basta strumentare direttamente la funzione all'inizio della catena di invocazioni.
+
+Se effettivamente il ritardo non è nella catena di invocazioni, allora la causa del problema è che il processo si è addormentato prima di tale catena di invocazioni, e si è svegliato con molto ritardo. In tale caso, più complesso, bisogna capire la causa dell'addormentamento, e risalire al punto (fuori dalla catena di invocazioni sotto esame) in cui il processo si è addormentato. Ma di questo caso più complesso vi parlerò, forse, in un'altra puntata.
+
+-----------------------------
+

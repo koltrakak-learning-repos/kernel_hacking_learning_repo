@@ -1,0 +1,569 @@
+Questo documento è diviso in tre parti.
+
+La prima contiene delle brevi istruzioni su come
+1) Eseguire un test di startup time con la suite S (l'esempio si può generalizzare)
+2) Attivare il blk tracer nella suite S: il blk tracer sarà configurato in modo tale da mostrare sia gli eventi del block layer che tutti i messaggi dallo I/O scheduler attivo
+3) Analizzare le tracce generate
+
+La seconda parte, sfruttando le conoscenze fornite nella prima, spiega come analizzare il caso più generale: dato un test
+- in cui il throughput è più basso o le latenze sono più alte dei valori attesi
+- ed in cui dalle tracce generate nella prima parte non si è trovato alcun problema dentro l'I/O scheduler
+si vedrà come
+- fare analisi generiche
+- analizzare la durata delle system call, e così scoprire se il problema è causato da system call che durano troppo
+- entrare dentro tali system call, nel caso in cui siano effettivamente loro la causa del problema, e scoprire il punto in cui tali system call si bloccano per troppo tempo (caso più probabile) oppure hanno un tempo di esecuzione inaspettatamente lungo (caso meno probabile).
+
+La terza parte è ancora più generale, perché riporta tecniche generali di analisi delle prestazioni.
+
+In ogni caso, l'attitudine ed il talento non banale che si deve mettere all'opera è quello descritto, per esempio, su questa T-shirt:
+https://dls-store.com/there-are-two-types-of-people-in-this-world-1-those-who-can-extrapolate-from-incomplete-data?s=hanes-5250&c=Black&p=FRONT
+
+				PRIMA PARTE
+REQUISITI
+
+Meglio avere una ventina/trentina di GB liberi sul disco di sistema.
+
+PROCURARSI E FAMILIARIZZARE CON LA SUITE
+
+Il primo passo è procurarsi la suite, ad esempio:
+git clone https://github.com/Algodev-github/S.git
+
+Entrate nella cartella S, e leggetevi per bene il README, così da farvi un'idea generale.
+
+NEL CASO PROVIATE A FARE TEST DI START-UP DA DENTRO UNA MACCHINA VIRTUALE
+
+In questo caso, vi dovete assicurare che la macchina virtuale non usi la cache dell'host.
+
+Ad esempio, per VirtualBox, controllate, nel pannello "Archiviazione", se è selezionata la casellina
+"Usa cache host" per il controller utilizzato per il vostro disco virtuale. Attenti a non confondervi col controller IDE, che di norma è utilizzato per il CD.
+
+Purtroppo, su alcuni sistemi host, VirtualBox fa comunque caching anche se questa casellina non è selezionata. Ve ne accorgete dal fatto che nei test vedete dei throughput irrealisticamente alti e della latenze irrealisticamente basse.
+
+Al contrario, QEMU/KVM non da problemi da questo punto di vista, perché selezionate "none" in "Show Virtual Details"->"IDE/SATA Disk"->Performance->"Cache Mode".
+
+Le macchine virtuali danno poi una interessante possibilità: scegliere la velocità dell'I/O. Questa possibilità è presente quantomeno in VirtualBox, mediante il seguente comando (che forse deve essere preceduto da un ulteriore comando per creare il gruppo Limit):
+VBoxManage bandwidthctl <VM_name> set Limit --limit <limit>
+
+Ad esempio:
+VBoxManage bandwidthctl "Ubuntu 16.04" set Limit --limit 50M
+VBoxManage bandwidthctl "Ubuntu 16.04" set Limit --limit 2G # praticamente, no limiti
+
+Attenzione al fatto che un device virtuale limitato in banda ha comportamenti 'anomali' rispetto ad un dispositivo vero. Una delle anomalie più evidenti è che il dispositivo va a velocità non limitata per molto tempo (ordine del secondo), dopodiché recupera la velocità eccessiva rimanendo quasi fermo per il secondo successivo, e così via. Negli intervalli di tempo in cui va a velocità non limitata, se il dispositivo di storage fisico è molto veloce (o se i dati sono già nella cache dell'host), il tempo di completamento di una richiesta può facilmente essere comparabile se non inferiore al tempo di elaborazione di tale richiesta da parte dello stack di I/O del sistema operativo. Pertanto le garanzie di servizio fornite su un tale disco dipendono anche da cosa accade sulla CPU, e sono quindi in parte fuori del controllo dello scheduler dell'I/O. In aggiunta a questa perdita di controllo, la banda di I/O ricevuta da un processo dipende fortemente anche da quante volta ha avuto la sfortuna di avere le proprie richieste servite nell'intervallo di tempo in cui il disco virtuale si è fermato per recuperare l'alta velocità' raggiunta nell'intervallo precedente.
+
+GENERICO TEST DI RESPONSIVENESS
+
+Potete partire dall'eseguire il generico test di responsiveness come da istruzioni in USAGE-INSTALLATION.
+
+ESEGUIRE IL TEST DI STARTUP MANUALMENTE
+
+Il test che ci interessa è comm_startup_lat.
+
+Quindi:
+cd comm_startup_lat/
+sudo ./comm_startup_lat.sh -h # vi fate un'idea di come si usa
+
+Ecco un esempio di test in cui è difficile garantire una latenza bassa:
+sudo ./comm_startup_lat.sh bfq 10 0 seq 3 "replay-startup-io gnometerm"
+
+Per eseguire un test che sta dando problemi ultimamente:
+sudo ./comm_startup_lat.sh bfq 5 5 rand 3 "lowriter --terminate-after-init"
+
+ACCENDERE LE TRACCE
+
+Passiamo all'uso delle tracce. Per attivare le tracce basta modificare il file ~/.S-config.sh (questo file è generato automaticamente alla prima esecuzione di uno qualsiasi degli script di benchmark, istruzioni in USAGE-INSTALLATION), e trasformare la riga
+TRACE=0
+in
+TRACE=1
+
+A questo punto, se si ripete il test, lo script provvederà ad accendere e spegnere il tracing per noi durante il test, ed a lasciare la traccia nella cartella locale o nella cartella con i risultati del benchmark (a seconda del tipo di benchmark).
+
+COPIARE LA TRACCIA
+
+A meno che lo script non l'abbia già copiata per voi, trovate la traccia nel seguente file di sistema, per accedere alla quale dobbiamo essere root:
+/sys/kernel/debug/tracing/trace
+
+La traccia è molto spesso enorme (centinaia di MB o anche qualche GB). Per lavorarci più velocemente, è necessario copiarla in un file regolare.
+
+Per questo motivo, gli script nella suite S copiano automaticamente la traccia nella cartella corrente.
+
+Se doveste aver bisogno della traccia per dei test in cui non avete la copia automatica della traccia, allora copiatela manualmente:
+sudo cp /sys/kernel/debug/tracing/trace <dove_pare_a_voi>
+
+VISUALIZZARE LA TRACCIA
+
+Uno dei visualizzatori che funziona meglio per analizzare dei file così grandi è less.
+
+COME SONO FATTI I MESSAGGI NELLA TRACCIA
+
+I messaggi di nostro maggiore interesse nella traccia sono quelli generati da BFQ stesso. Tali messaggi sono generati attraverso le macro bfq_log e bfq_log_bfqq.
+
+Ecco un esempio di riga di traccia contenente un messaggio generato da BFQ:
+
+comm_startup_la-3863  [000] dNh2  1121.261176:   8,0    m   N bfq3956S / putting rq ffff8801f34b9a00 with 0 sects left, STARTED 2
+
+Ed ecco il significato dei campi che ci interessano di più:
+
+comm_startup_la-3863 Nome e PID del processo in esecuzione quando il messaggio è stato generato
+-> Attenzione: ho notato che, se c'è un wraparound dei PID, allora i nomi dei processi non appaiono più'. Basta riavviare la macchina per eliminare il problema.
+
+[Indice processore] Processore su cui è eseguito il codice che genera il messaggio
+
+1121.261176 Timestamp del messaggio (quando è stato generato) in secondi
+
+8,0 Major e minor number del dispositivo per cui è stato generato il messaggio
+
+Tipo di evento, identificato tipicamente da una o più lettere. Dettagli sul tipo di evento li trovate per esempio in questa pagina:
+https://man7.org/linux/man-pages/man1/blkparse.1.html
+In particolare nel caso di messaggio scritto dallo scheduler (o da qualsiasi altro componente generico del block layer), la lettera che individua l'evento è tipicamente una m
+
+bfq3956S Identificatore della coda per cui è generato il messaggio. L'identificatore è bfq<PID-del-processo-a-cui-e'-associata-la-coda><S-oppure-A>
+Il PID può coincidere o meno col PID del processo in esecuzione quando il messaggio è generato. In particolare, coincide se il kernel è in user context quando il messaggio è generato, mentre tipicamente non coincide se è in interrupt context.
+In quanto alla lettera S oppure A, c'è la S se la code contiene richieste sincrone, e la A se la coda contiene richieste asincrone.
+
+Il resto del messaggio è semplicemente quello che lo scheduler ha voluto scrivere.
+
+
+RIDURSI ALLA SITUAZIONE PIU' SEMPLICE
+
+Quando si va a caccia di bachi, è sempre conveniente ridursi nella situazione più semplice possibile in cui il problema si verifica. Quindi, un primissimo passo potrebbe essere quello di far eseguire una sola iterazione allo script:
+sudo ./comm_startup_lat.sh bfq 5 5 rand 1 "lowriter --terminate-after-init"
+
+OTTENERE IL DUMP DELLA TRACCIA NEL KERNEL LOG IN CASO DI OOPS
+
+ftrace_dump_on_oops [taken from https://lwn.net/Articles/366796/]
+There are times that the kernel will crash and examining the memory and state of the crash is more of a CSI science than a program debugging science. Using kdump/kexec with the crash utility is a valuable way to examine the state of the system at the point of the crash, but it does not let you see what has happened prior to the event that caused the crash.
+
+Having Ftrace configured and enabling ftrace_dump_on_oops in the kernel boot parameters (https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/kernel-parameters.txt#n1318), or by echoing a "1" into /proc/sys/kernel/ftrace_dump_on_oops, will enable Ftrace to dump to the console the entire trace buffer in ASCII format on oops or panic. Having the console output to a serial log makes debugging crashes much easier. You can now trace back the events that led up to the crash.
+
+Dumping to the console may take a long time since the default Ftrace ring buffer is over a megabyte per CPU. To shrink the size of the ring buffer, write the number of kilobytes you want the ring buffer to be to buffer_size_kb. Note that the value is per CPU, not the total size of the ring buffer.
+
+    [tracing]# echo 50 > buffer_size_kb
+The above will shrink the Ftrace ring buffer down to 50 kilobytes per CPU.
+You can also trigger a dump of the Ftrace buffer to the console with sysrq-z.
+
+Ecco un esempio di scritto che utilizza questa funzionalità, sfruttando codice disponibile nella suite S:
+#/bin/bash
+echo 1 > /proc/sys/kernel/ftrace_dump_on_oops
+. <percorso_alla_suite_S>/utilities/tracing.sh 
+TRACE=1
+DEVS=<nome device per cui prendere la traccia (sda, sdb, ...)>
+init_tracing
+echo > /sys/kernel/debug/tracing/trace
+set_tracing 1
+
+
+
+OTTENERE PIU' MESSAGGI DI LOG
+
+Per avere delle tracce complete è dovete usare la versione di sviluppo di bfq, e non quella di produzione. Infatti la versione di sviluppo genera una quantità enormemente maggiore di messaggi. Poi ovviamente dovete stare attenti che la versione di produzione non sia talmente indietro rispetto a quella di sviluppo (che contiene sempre tutti gli aggiornamenti) che un certo problema esiste con la prima ma non più con la seconda.
+
+In pratica per usare la versione di sviluppo, dovete prendervi il repository che la contiene:
+git clone https://github.com/Algodev-github/bfq-mq.git
+
+Poi compilate il kernel contenuto in uno dei branch del repository, seguendo i soliti passi. Potete partire dal config che avete usato per il kernel mainline.
+
+Col nuovo kernel in esecuzione, rieseguite il test per prendere la traccia con BFQ:
+sudo ./comm_startup_lat.sh bfq 5 5 rand 1 "lowriter --terminate-after-init"
+
+ANALIZZARE LA TRACCIA
+
+Il tipico problema che si scopre con questi test di startup è che qualche applicazione non parte velocemente come sperato.
+
+Ecco i passi tipici con cui analizzare un problema di questo tipo.
+
+1. Individuare i PID dei processi dell'applicazione dentro la traccia
+
+Un trucco per eseguire questo passo con relativa facilità è
+a) Fare partire l'applicazione problematica da sola e prendere la traccia
+
+b) Cercare il nome dell'applicazione nella traccia per beccare, con altissima probabilità il primo processo dell'applicazione. Per questo passo, può essere più facile effettuare la ricerca in una versione filtrata della traccia (vedi il seguente passo "2. Filtrare la traccia"). Se nella versione filtrata non trovate il nome di un processo per il quale si vede solo il PID nel formato bfq<PID>, vuol dire che nella versione filtrata ci sono solo messaggi stampati in contesto interrupt, e non è mai accaduta la coincidenza che il processo con quel PID fosse in esecuzione quando c'è stato uno degli interrupt che hanno generato tali messaggi. Cercate semplicemente quel PID nella traccia non filtrata.
+
+c) Annotarsi quali e quanti processi che hanno molto probabilmente o quasi sicuramente a che fare con l'applicazione, fanno I/O fino alla fine della traccia. In merito, in queste note trovare un comando per ottenere tutti e soli i processi che fanno I/O.
+
+d) Una volta capito qual è la sequenza di processi che fanno I/O per quell'applicazione, prendere la traccia per lo scenario in cui si verifica il problema che si vuole risolvere
+
+In merito al punto c, ecco alcuni schemi.
+
+bash ha un solo processo, che si chiama proprio bash
+
+lowriter, per avviarsi ha il seguente schema:
+lowriter-L
+oosplash-N
+Xorg-M
+javaldx-P
+soffice.bin-Q
+
+Per avviare xterm si ha il seguente schema:
+xterm-N: il processo xterm fa I/O ininterrottamente per un po', poi si ferma
+Xorg-M: fa pochissimo I/O e si ferma
+xterm-N: fa un altro po' di I/O ininterrottamente e si ferma
+Xorg-M: fa pochissimo I/O e si ferma
+xterm-N: fa pochissimo I/O e si ferma
+Xorg-M: fa ininterrottamente I/O per un po' e si ferma
+xterm-N: il processo xterm fa I/O ininterrottamente per un po' (con una micropausa nel mezzo, sufficiente ad avere un idling timeout), poi si ferma
+
+Per trovare tutti i processi coinvolti nell'avvio di una applicazione ci vuole un po' di intuito, ma alla fine sono sempre gli stessi per la stessa applicazione.
+
+2. Filtrare la traccia
+
+Un modo per farsi un'idea di quello che succede durante il test, è
+(a) capire quali processi sono coinvolti, come si è detto
+(b) per tali processi, capire quando e per quanto tempo è in servizio ciascuna coda.
+
+Per il passo (a), vedere sotto una possibile riga di comando per ottenere rapidamente i processi che fanno I/O.
+
+Per il passo (b), si può filtrare la traccia così:
+
+egrep "set_in_service_queue] cur|expire " trace | less
+
+Ogni coda è in servizio tra una set_in_service ed una expire. La expire inoltre vi da almeno due informazioni utili: vi dice perché è stata espirata la coda, e vi dice il peso che la coda aveva quando è stata espirata la coda. Dal peso potete capire, ad esempio, se la coda è in weight raising (tipicamente 1200 vuol dire weight raising per interattivi, e 120000 vuol dire weight raising per soft real time).
+
+Un filtraggio più completo vi permette invece di capire anche quanto tempo passa tra quando una coda diventa attiva (perché ci entra una richiesta dentro) e quando finalmente va in servizio. Per farlo, potete eseguire:
+
+egrep "non-busy|set_in_service_queue] cur|expire " trace | less
+
+Infine, se volete verificare rapidamente anche quanta injection viene subita dalle code:
+
+egrep "set_in_service_queue] cur|expire |chosen the queue|choosing directly" trace | less
+
+Ecco un esempio di verifica di buon funzionamento: data un'applicazione che BFQ dovrebbe privilegiare, controllare che, per tutti i processi dell'applicazione,
+1) le code di tali processi siano sempre in weight raising, e lo si vede già col primo filtraggio
+2) le code di tali processi inizino ad essere servite immediatamente dopo o almeno pochissimo dopo che diventano attive; questo lo si vede col secondo filtraggio
+3) le code di tali processi siano le uniche in weight raising, oppure, se ci sono altre code in weight raising, queste altre code sono in weight raising per motivi giusti (ad esempio, sono associate a processi interattivi o che fanno I/O sporadicamente per altri motivi)
+
+Una volta che si è capito che qualcosa non va per una data coda, ci sono due possibilità:
+1) Si filtra la traccia per avere solo i messaggi relativi a tale coda. Per esempio, se la coda fosse bfq3170, si utilizza l'identificatore della coda come segue
+egrep bfq3170 trace | less
+
+2) Se il filtraggio precedente non ci fa vedere abbastanza messaggi per capire cosa non sta funzionando, allora ci tocca andare sull'intera traccia. Il motivo per cui potremmo non avere abbastanza messaggi col filtraggio per identificatore di coda, è che certi eventi generano messaggi senza menzionare la coda. Ad esempio "bfq timer expired" non menziona la coda.
+
+Nella traccia completa è molto facile perdersi, a causa dell'enorme quantità di messaggi. Una tecnica per trovare i punti interessanti è la seguente
+a) Sulla traccia filtrata solo per set_in_service ed expire, si cerca l'istante più vicino all'evento anomalo che si vuole analizzare (ad esempio, se il peso va giù inspiegabilmente, si cerca il primo instante in cui si vede il problema sulla traccia filtrata). Per istante, intendo il timestamp nella traccia
+b) Si filtra la traccia per identificatore della coda interessata, utilizzando il timestamp trovato nel passaggio precedente per collocarsi nel punto più vicino al problema. A questo punto, ipotizzando sempre che neanche questo filtraggio basti a trovare il problema, si utilizza comunque questa traccia filtrata per trovare il prossimo istante ancora più vicino all'inizio del problema
+c) Utilizzando l'istante trovato nel passaggio precedente, si salta direttamente a tale istante nella traccia completa, e si incrociano le dita :)
+
+----------------------
+
+OTTENERE TUTTI I PROCESSI CHE APPAIONO NELLA TRACCIA
+
+awk '{print $1}' trace | egrep '-' | sort -u
+
+----------------------
+
+OTTENERE TUTTE LE CODE CHE APPAIONO NELLA TRACCIA
+
+awk '{print $9}' trace | egrep bfq | sort -u
+
+----------------------
+
+OTTENERE I SOLI PROCESSI CHE EFFETTIVAMENTE FANNO I/O, TRA QUELLI CHE APPAIONO NELLA TRACCIA
+(attenzione, i processi con I/O redirezionato in code fuse potrebbero non apparire)
+
+for proc in $(awk '{print $1}' trace | egrep -v '<idle>' | egrep '-' | sort -u); do pid=$(echo $proc | sed 's/.*-//'); if [[ "$(egrep bfq.*$pid trace)" != "" ]]; then echo $proc; fi done
+
+
+----------------------
+
+OTTENERE RAPIDAMENTE LA STRINGA bfq<pid> PER UN PROCESSO A PARTIRE DAL NOME DEL PROCESSO
+
+egrep <nome processo> trace | awk '{print $1}' | tail -n 1 | sed 's/.*-\(.*\)/bfq\1/g'
+
+Ad esempio:
+egrep mplayer trace | awk '{print $1}' | tail -n 1 | sed 's/.*-\(.*\)/bfq\1/g'
+
+Con questo trucco, si può passare direttamente al filtraggio "set_in_service_queue] cur|expire " per un dato processo:
+
+string=$(egrep <nome_processo> trace | awk '{print $1}' | tail -n 1 | sed 's/.*-\(.*\)/bfq\1/g') && echo $string && egrep "set_in_service_queue] cur|expire " trace | egrep $string | less
+
+---------------------
+
+ALTRE MISURAZIONI UTILI
+
+Quantità totale di I/O che un processo fa:
+
+seq=$(egrep <nome processo>- trace | egrep " Q |expire \(" | awk '{print $10}' | less) ; for s in $seq; do sum=$(( $sum + $s )); echo $s $sum ; done | less
+
+Quantità totale di I/O sequenziale
+egrep " D " trace | awk 'NR == 1{old = $8+$10; totseq = 0; next}{delta = $8-old; if (delta == 0) {totseq = totseq + $10;} else {if (totseq > 0) printf "<%d>\n", totseq; totseq = 0;} printf "%d %d %d\n", $8, delta, totseq; old = $8+$10}' 2>&1 | egrep "<" | sed "s/<//" | sed "s/>//" | awk '{s+=$1} END {print s}'
+
+-----------------------
+
+CONTROLLARE L'ATTIVAZIONE DELL'IDLING
+
+In presenza di perdite di throughput inattese, una causa probabile è che BFQ fermi il dispatch dell'I/O quando qualche coda sync rimane vuota. Per controllare, si può cercare la stringa "arm idle".
+
+CONTROLLARE LE DISPATCH ANDATE A VUOTO A CAUSA DELL'IDLING
+
+L'idling di per sé potrebbe non portare a dispatch a vuoto, grazie all'injection.  Per controllare le dispatch effettivamente andate a vuoto, si può cercare:
+egrep "idling with <num-code-busy>" trace
+
+I casi interessanti sono quelli con num-code-busy maggiore di 1, perché implicano che ci sarebbe stata appunto la possibilità di mandare I/O, ma BFQ si è rifiutato.
+
+A questo punto si può approfondire l'analisi, e provare a capire la causa del mancato dispatch:
+egrep "idling with <num-code-busy>.*as no injector" trace # è stato cercato un iniettore, ma non è stato trovato
+egrep "idling with <num-code-busy>.*intentionally" trace # BFQ pensava proprio che fosse meglio, per il throughput, di non iniettare niente
+
+Poi si può filtrare in modo più specifico, per singole code.
+
+CONTROLLARE WAKER
+
+Il meccanismo dei waker è molto efficace per tirare su il throughput. Un filtraggio semplice per controllare la macchina a stati che gestisce i waker é:
+egrep waker trace
+
+Poi si può filtrare in modo più specifico, per singole code.
+
+CONTROLLARE LO STABLE MERGE
+
+Lo stable merge è pensato per tenere il throughput molto alto nel caso di applicazioni costituite da vari processi che iniziano subito a fare I/O tutti assieme, e vanno avanti ininterrottamente per un po'. Tale stable merge può avvenire sia non appena una coda è creata, sia dopo un po'.
+
+Per controllare quali code hanno beneficiato dello stable merge da subito:
+egrep "stably merging" trace
+Per controllare quali code non ne hanno beneficiato, perché non create abbastanza presto dopo l'ultima:
+egrep "not merging stably" trace
+
+Per controllare quali code hanno beneficiato dello stable merge ritardato:
+egrep "late stable merging with" trace
+Per controllare quali code hanno fallito lo stable merge ritardato:
+egrep "no late stable merging" trace
+
+
+ANALISI DEL TEMPO CHE PASSA TRA IL PASSAGGIO A NON VUOTO ALLA PRIMA DISPATCH
+
+egrep "bfq<PID>" trace | egrep "new allocated|bfq_dispatch_rq_from_bfqq" | awk 'NR==1{s=$10; print $0; next}{if ($10 == "[bfq_init_rq]" || s == "[bfq_init_rq]" ) print $0; s=$10}' | awk '{print $4}' | sed 's/\(.*\)./\1/' | awk 'NR==1{s=$1; print $1; next}{printf "%f ", $1; if (NR % 2 == 0) print $1 - s; else printf "\n" ; s=$1}' | awk '{if (NR % 2 == 0) print $2}'  | sort -nu | less
+
+Altra soluzione, che inoltre stampa solo i valori sopra una certa soglia:
+egrep bfq<PID>" trace | egrep "init_rq\].*bfqq |sync request" | awk 'NR == 1 {old = $4; print $0; next} {if ($4 - old > <soglia>) print $4-old, $0; old =$4}' | egrep sync
+
+				SECONDA PARTE
+
+ANALISI GENERICHE
+
+Un'informazione che spesso è utile è il numero di richieste accodate nel drive. La si può ottenere, ad esempio, con l'opzione -x del comando iostat.
+
+---------------------------
+
+UTILIZZO DEL CODICE DELLA SUITE S PER GENERARE TRACCE DEL BLOCK LAYER AL DI FUORI DELLA SUITE
+
+Leggere le istruzioni nel file S/utilities/tracing.sh
+
+---------------------------
+
+TRACCIAMENTO GENERALE DI QUELLO CHE SUCCEDE NEL KERNEL: trace-cmd
+
+https://www.youtube.com/watch?v=JRyrhsx-L5Y
+-> Minuti più interessanti per noi 17:02 -> 40:14
+
+---------------------------
+
+SCOPERTA DELLE IMPLEMENTAZIONI DELLE SYSTEM CALL NEL SORGENTE DEL KERNEL
+
+Data una system call, di nome syscall, riportata da strace
+
+1) Entrare nella directory dei sorgenti Linux
+cd linux
+
+2) Cercare la definizione della syscall
+grep SYSCALL_DEFINE * -R | grep "(syscall,"
+
+Ad esempio, se la syscall fosse fsync_
+grep SYSCALL_DEFINE * -R | grep "(fsync,"
+fs/sync.c:SYSCALL_DEFINE1(fsync, unsigned int, fd)
+
+3) Aprire il file riportato nell'output di grep, e cercare la riga trovata da grep. Tale riga è l'intestazione di una funzione. Nel corpo della funzione trovate l'invocazione della funzione che implementa la system call. Ad esempio, per il caso della fsync di cui sopra, trovereste:
+
+SYSCALL_DEFINE1(fsync, unsigned int, fd)
+{
+	return do_fsync(fd, 0);
+}
+
+Quindi la funzione che implementa fsync sarebbe do_fsync.
+
+
+						TERZA PARTE
+
+IPOTESI E VERIFICHE
+
+Quando si ha una perdita di prestazioni di cui non si conosce la causa, una tecnica per analizzare il problema è quella 'scientifica': fare delle ipotesi sulle cause, e verificarle sperimentalmente.
+
+Eccovi una lista di cause di perdite di throughput, con le relative tecniche per scoprire la causa
+- Meccanismo di low_latency che, per favorire alcuni processi, riduce il parallelismo. In particolare, questo meccanismo può aumentare l'ammontare di plugging dell'I/O dispatch. Per verificare se la perdita di throughput ha a che fare col meccanismo di low_latency, provate semplicemente a disattivarlo ed a ripetere il benchmark. Per disattivarlo:
+echo 0 > /sys/block/<nome_device>/queue/iosched/low_latency
+
+- Plugging dell'I/O dispatch: indipendentemente dalla causa a monte (quale ad esempio low_latency), il plugging può ridurre il throughput. Per controllare, provate ad azzerare il valore del parametro slice_idle:
+echo 0 > /sys/block/<nome_device>/queue/iosched/slice_idle
+
+- Troppo poca injection. In questo caso la verifica principale è l'analisi dell'ammontare di injection riportata nelle tracce.
+
+
+CONFRONTO TRA TRACCE PER PRESTAZIONI DIVERSE
+
+Si può girare a proprio vantaggio il fatto che un componente abbia prestazioni oscillanti, o il fatto che le prestazioni cambino tra due versioni del componente. Infatti in questo caso basta confrontare le tracce ottenute per la prestazione migliore con quelle ottenute per la prestazione peggiore. Con alta probabilità, le differenze tra le tracce mostreranno la causa del problema.
+
+ESEMPIO COMPLETO DI UTILIZZO DI QUESTE TECNICHE, CHE HA PORTATO ALLA SOLUZIONE DI UN PROBLEMA REALE
+Soluzione e descrizione realizzate da Giacomo Guiduzzi
+
+Operazioni eseguite per debuggare codec AC'97 ALSA (Link alla patch: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=17aaf0193392cb3451bf0ac75ba396ec4cbded6e)
+
+Eseguendo i kselftest dai sorgenti del kernel (test diagnostici integrati per vedere se qualcosa non funziona come dovrebbe) mi sono accorto che nel kselftest per la libreria audio ALSA fallivano alcuni dei sotto-test eseguiti.
+Per prima cosa sono andato a vedere il sorgente del test che veniva eseguito per cercare di capire cosa venisse fatto e dove quei messaggio di errore venivano stampati.
+Dopo un po' di debugging sembrava che il problema non fosse nel test stesso ma nella libreria alsalib che viene utilizzata per interfacciare lo userspace con il kernel. Il problema era che non avevo modo di sapere cosa venisse fatto all'interno della libreria.
+
+Per capire quali funzioni venissero chiamate dal test in osservazione ho utilizzato strace:
+	- strace mixer-test > ~/mixer-test-strace.txt
+
+Esempio di output da mixer-test-strace.txt:
+
+execve("./mixer-test", ["./mixer-test"], 0x7ffdffaaea60 /* 56 vars */) = 0
+brk(NULL)                               = 0x7fe6930c3000
+arch_prctl(0x3001 /* ARCH_??? */, 0x7fff0b9bfed0) = -1 EINVAL (Invalid argument)
+access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=74640, ...}) = 0
+mmap(NULL, 74640, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7fe692aa7000
+close(3)                                = 0
+openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libasound.so.2", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\2\1\1\0\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\200\263\2\0\0\0\0\0"..., 832) = 832
+fstat(3, {st_mode=S_IFREG|0644, st_size=1022400, ...}) = 0
+mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7fe692aa5000
+mmap(NULL, 1024816, PROT_READ, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0x7fe6929aa000
+...
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fe6930d7dc0) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fe6930d7740) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_WRITE, 0x7fff0b9bf470) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fff0b9bf940) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_WRITE, 0x7fff0b9bef60) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fff0b9bf430) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_WRITE, 0x7fff0b9bef60) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fff0b9bf430) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_WRITE, 0x7fff0b9bf470) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fff0b9bf940) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_READ, 0x7fe6930d70c0) = 0
+ioctl(3, SNDRV_CTL_IOCTL_ELEM_WRITE, 0x7fff0b9bf470) = 0
+...
+
+Questo lungo susseguirsi di chiamate ioctl mi ha permesso di dedurre che fosse proprio questa la chiamata che veniva fatta dal test. Era il caso di assicurarsene.
+Per capire dove quella ioctl venisse eseguita nella libreria ho scaricato i sorgenti di alsalib e li ho ricompilati con i simboli di debug, cosi' da poter seguire l'esecuzione del test con un debugger.
+Ho infine trovato la chiamata ioctl che veniva eseguita dalla libreria per le operazioni di lettura e scrittura (come si puo' dedurre dal nome della costante tra i parametri della funzione).
+L'output di strace mi diceva che alla funzione veniva passato un intero e un indirizzo di memoria, ma non mi diceva nulla sul valore di quella costante nel secondo parametro. Ho scoperto successivamente che quel valore era calcolato a runtime a seconda di alcuni parametri in kernelspace.
+
+Dopo aver verificato che i parametri passati dal test fossero coerenti con quelli passati alla ioctl sembrava molto probabile che il problema non fosse in userspace.
+
+Per capire cosa succedesse in kernelspace ho sfruttato trace-cmd: tramite il filesystem virtuale /proc e' possibile registrare le invocazioni delle funzioni kernel grazie a ftrace e stampare il log ottenuto in un secondo momento:
+	- sudo trace-cmd start -p function
+	- ./mixer-test
+	- sudo trace-cmd stop
+	- sudo trace-cmd show > traces.txt
+
+Il parametro -p di trace-cmd start non identifica il nome della funzione da tracciare ma il tipo di tracer da utilizzare (direttamente dal manuale di trace-cmd-start):
+
+"-p plugin
+
+	Specify a trace plugin. Plugins are special Ftrace tracers that usually do more than just trace an event.
+	Common plugins are function, function_graph, preemptirqsoff, irqsoff, preemptoff, and wakeup."
+
+Chiamando trace-cmd manualmente pero' il file e' gigantesco e pieno di operazioni spurie: nei pochi secondi necessari all'uomo per scrivere i comandi il sistema ha gia' fatto di tutto e di piu'.
+La soluzione piu' efficace trovata e' stata di avviare trace-cmd direttamente dal test appena prima della chiamata ioctl e disattivarlo subito dopo, per farsi poi stampare su file il log ottenuto:
+
+	system("trace-cmd start -p function");
+
+	// effective system call
+	ioctl(hw->fd, SNDRV_CTL_IOCTL_ELEM_READ, control);
+
+	system("trace-cmd stop");
+
+	// prepare file to save output
+	char *filename;
+	asprintf(&filename, "/home/username/new_traces_read_%d.txt", debug_struct.file_counter);
+	FILE* result_file = fopen(filename, "w");
+	FILE *process_handle;
+	char line[1024];
+
+	// open the command process for reading
+	process_handle = popen("trace-cmd show", "r");
+
+	read the output a line at a time and output it
+	while(fgets(line, sizeof(line), process_handle) != NULL)
+		fprintf(result_file, "%s", line);
+
+	pclose(process_handle);
+	fclose(result_file);
+
+	// avoid memory leak!
+	free(filename);
+
+Il log file ottenuto contiene molte meno chiamate spurie, nei casi fortunati non ce ne sono proprio.
+Grazie a questo e al fatto che le operazioni sono identificate dal nome del processo che le sta eseguendo, e' stato piu' chiaro osservare cosa veniva fatto.
+Estratto d'esempio di new_traces_read_1.txt (la funzione a destra chiama la funzione a sinistra):
+
+alsatest-2249    [000] ...1.   109.683019: __x64_sys_ioctl <-do_syscall_64	------------------------	(ingresso nella syscall dallo userspace)
+alsatest-2249    [000] ...1.   109.683019: __fdget <-__x64_sys_ioctl
+alsatest-2249    [000] ...1.   109.683019: __fget_light <-__fdget
+alsatest-2249    [000] ...1.   109.683020: security_file_ioctl <-__x64_sys_ioctl
+alsatest-2249    [000] ...1.   109.683020: do_vfs_ioctl <-__x64_sys_ioctl
+alsatest-2249    [000] ...1.   109.683020: snd_ctl_ioctl <-__x64_sys_ioctl	------------------------	(ingresso nelle funzioni di libreria ALSA kernel, prefisso snd_ctl)
+alsatest-2249    [000] ...1.   109.683021: memdup_user <-snd_ctl_ioctl
+alsatest-2249    [000] ...1.   109.685003: down_read <-snd_ctl_ioctl
+alsatest-2249    [000] ...1.   109.685003: __cond_resched <-down_read
+alsatest-2249    [000] ...1.   109.685004: snd_ctl_elem_read <-snd_ctl_ioctl	----------------------	(chiamata dall'hook per la ioctl alla specifica funzione di lettura)
+alsatest-2249    [000] ...1.   109.685004: snd_ctl_find_id <-snd_ctl_elem_read
+alsatest-2249    [000] ...1.   109.685006: snd_power_ref_and_wait <-snd_ctl_elem_read
+alsatest-2249    [000] ...1.   109.685007: snd_ac97_ad18xx_pcm_get_volume <-snd_ctl_elem_read	------	(passaggio alla funzione di lettura del driver per il codec AC'97)
+alsatest-2249    [000] ...1.   109.685007: mutex_lock <-snd_ac97_ad18xx_pcm_get_volume
+alsatest-2249    [000] ...1.   109.685007: __cond_resched <-mutex_lock
+alsatest-2249    [000] ...1.   109.685008: mutex_unlock <-snd_ac97_ad18xx_pcm_get_volume
+alsatest-2249    [000] ...1.   109.685008: __wake_up <-snd_ctl_elem_read
+alsatest-2249    [000] ...1.   109.685008: __wake_up_common_lock <-__wake_up
+alsatest-2249    [000] ...1.   109.685009: _raw_spin_lock_irqsave <-__wake_up_common_lock
+alsatest-2249    [000] d..1.   109.685009: preempt_count_add <-_raw_spin_lock_irqsave
+alsatest-2249    [000] d..2.   109.685009: __wake_up_common <-__wake_up_common_lock
+alsatest-2249    [000] d..2.   109.685009: _raw_spin_unlock_irqrestore <-__wake_up_common_lock
+alsatest-2249    [000] ...2.   109.685010: preempt_count_sub <-_raw_spin_unlock_irqrestore
+alsatest-2249    [000] ...1.   109.685010: up_read <-snd_ctl_ioctl
+alsatest-2249    [000] ...1.   109.685011: kfree <-snd_ctl_ioctl
+alsatest-2249    [000] d..1.   109.685012: exit_to_user_mode_prepare <-syscall_exit_to_user_mode	--	(uscita dal kernelspace)
+alsatest-2249    [000] d..1.   109.685013: fpregs_assert_state_consistent <-exit_to_user_mode_prepare
+
+Per associare la ioctl nell'output di strace alla chiamata __x64_sys_ioctl presente in questo snippet mi sono basato innanzitutto sul nome della funzione, ma soprattutto sul fatto che nella seconda riga
+e' presente una chiamata alla funzione fdget e alla quarta riga una chiamata alla security_file_ioctl, che sono alcune delle prime funzioni chiamate dall'implementazione della ioctl nei sorgenti del kernel;
+questo mi ha permesso di dedurre che fosse la stessa ioctl che stavo analizzando. Sono inoltre stato in grado di identificare il punto in cui si passava da userspace a kernelspace grazie al fatto che poco
+prima della do_syscall_64 fosse presente la syscall_enter_from_user_mode, che non e' riportata nello snippet ma il cui nome ne indica chiaramente lo scopo. La sequenza di chiamate di funzione era coerente con cio'
+che mi aspettavo di vedere, dandomi speranza di essere sulla strada giusta.
+Una volta scoperto il percorso seguito dal kernel e' stato necessario capire cosa venisse fatto all'interno delle funzioni e quali valori venissero assunti da certe variabili per decretare quale fosse il problema.
+Tramite le printk e le relative macro (in particolare ho sfruttato la pr_crit()), si potevano stampare valori nel kernel log, ma il risultato e' che facendolo in funzioni molto utilizzate in generale dal sistema (come la __x64_sys_ioctl) si raggiungeva un tale livello di
+overhead da mandare tutto in crash a causa dei timeout superati sui dispositivi durante il boot. Sfruttando la conoscenza dei parametri passati alla ioctl illustrati da strace, e' stato decisivo riuscire a decretare quando fosse necessario stampare nel kernel log impostando
+una variabile globale aggiunta ad hoc:
+
+	static int kernelhacking = 0;
+	...
+	static int snd_ctl_elem_write_user(...){
+		if(!strncmp(_control->id.name, "Surround Playback Volume", 24))
+			kernelhacking = 1;
+		...
+	}
+
+Questo controllo confrontava il nome del dispositivo con quello che riportava il problema in userspace. In questo modo era sufficiente verificare il valore della variabile per capire se fosse il caso di stampare o no ed il sistema ne era molto meno influenzato.
+
+Esempio di stampa utile:
+
+if(kcontrol->kernelhacking){
+	pr_crit("long values in ucontrol: %ld, %ld\n", ucontrol->value.integer.value[0], ucontrol->value.integer.value[1]);
+	pr_crit("bitwise and 31: %hu, %hu\n", (unsigned short)ucontrol->value.integer.value[0] & 31, (unsigned short)ucontrol->value.integer.value[1] & 31);
+}
+
+Tramite queste stampe si sono analizzati i valori utilizzati dal kernel per fare il proprio lavoro e si ha decretato quale fosse il problema, arrivando ad un bugfix:
+	- Nella funzione di scrittura, snd_ac97_ad18xx_pcm_put_volume, venivano eseguite queste istruzioni:
+
+		val1 = 31 - (ucontrol->value.integer.value[0] & 31);
+		val2 = 31 - (ucontrol->value.integer.value[1] & 31);
+		return snd_ac97_ad18xx_update_pcm_bits(ac97, codec, 0x1f1f, (val1 << 8) | val2);
+
+		Per farla semplice, i due valori val1 e val2 venivano controllati perche' avessero solo valori tra 0 e 31 grazie al bitwise AND, e venivano poi compattati in soli due byte spostando val1 nel primo byte con (val1 << 8) e aggiungendo val2 con il bitwise OR.
+
+	- Nella funzione di lettura, snd_ac97_ad18xx_pcm_get_volume, venivano eseguite queste istruzioni:
+
+		ucontrol->value.integer.value[0] = 31 - ((ac97->spec.ad18xx.pcmreg[codec] >> 0) & 31);
+		ucontrol->value.integer.value[1] = 31 - ((ac97->spec.ad18xx.pcmreg[codec] >> 8) & 31);
+
+		Osservando l'ordine delle operazioni, veniva messo val2 in value.integer.value[0] e val1 in value.integer.value[1].
+		Questa inversione era il motivo degli errori in userspace.
+

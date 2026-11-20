@@ -1,0 +1,414 @@
+Un repo git è costituito da un insieme di branch.
+
+Per visualizzare tutti i branch
+git branch
+
+git branch evidenzia anche il branch su cui vi trovate al momento
+
+Per cambiare branch:
+git checkout <nome_branch>
+- modifica il contenuto dell'albero di file affinché combaci col contenuto del branch
+
+
+git status
+
+Per controllare lo stato del repository ed avere indicazioni su come procedere per effettuare le operazioni principali correlate con tale stato. Usate questo comando tutte le volte che non vi ricordate lo stato o quello che dovete fare.
+
+Pagine di manuale di git
+man git-<comando>
+Ad esempio, per visualizzare la pagina di manuale del comando status
+man git-status
+
+
+Per vedere l'elenco dei commit
+git log
+Ogni commit contiene: hash (che lo identifica univocamente), autore, subject, messaggio di commit e altre info. git log vi mostra esattamente queste info.
+
+Per vedere anche il contenuto dei commit (diff):
+git log -p
+
+Per visualizzare solo l'hash e il subject di ogni commit:
+git log --oneline
+
+Per vedere il log di un intervallo di commit:
+
+git log <hash_primo_commit>~..<hash_ultimo_commit>
+
+Per vedere il log di un solo commit:
+
+git log <hash_primo_commit>~..<hash_primo_commit>
+
+Oppure, per fare la stessa cosa, ma senza la possibilità di ridurre le informazioni in output
+
+git show <hash_commit>
+
+Se non si aggiunge l'hash del commit, allora git show mostra il commit in testa al branch.
+
+Si può associare un tag a ciascun commit, tramite il comando git tag (non ne vediamo i dettagli in queste note)
+
+Per stampare tutti i commit fino ad un dato tag, eventualmente solo per un certo insieme di file:
+
+git log <tag> [<pattern dei file>]
+
+Ad esempio:
+git log v5.4 block/bfq* # log fino al tag v5.4, solo per i commit riguardanti i file che stanno nella cartella block ed iniziano per bfq
+
+Con git log si può stampare anche il log di branch diversi da quello corrente:
+
+git log <nome_branch>
+
+Per scoprire a quali versioni del kernel appartiene un certo commit, un metodo è il seguente:
+git log --oneline | egrep "commit message"
+Così facendo si trova l'hash del commit, dopodiché
+git tag --contains <hash>
+riporterà tutti i tag per i quali il commit è disponibile. Non basta cercare il commit nell'output di git log, perché la storia non è lineare.
+
+git clean -fd
+- aiuta anche se un checkout o qualche altra operazione si interrompe nel mezzo
+- attenzione al caso in cui abbiate veramente qualche vostro file in più' nel tree
+- pulisce solo a partire dalla cartella corrente (per un clean totale, dovete essere nella root del repository)
+
+Per controllare cosa c'è di diverso nell'albero rispetto al commit su cui vi trovate:
+git diff
+
+Per resettare il contenuto dell'albero rispetto a un commit (modifica solo i file nel repo):
+git reset --hard <hash del commit>
+
+Per resettare rispetto al commit in testa:
+git reset --hard HEAD
+oppure
+git reset --hard
+
+Per resettare al commit che precede quello in testa
+git reset --hard HEAD~
+
+Per resettare al commit che precede di n posizioni quello in testa
+git reset --hard HEAD~n
+
+- anche questo aiuta nel caso di operazioni sospese nel mezzo, a volte va combinato con git clean
+
+Per visualizzare i repo remoti:
+git remote
+
+Per visualizzare tutte le info sui repo remoti:
+git remote -v
+
+Per aggiungere un repo remoto:
+git remote add <nome_che_si_vuole_dare_al_repo> <URL del repo>
+
+Per sincronizzarsi con un branch remoto la cui storia è cambiata:
+git pull # per scaricare i cambiamenti
+# se tutto  va bene, il git pull gia' basta per la sincronizzazione
+# altrimenti:
+git fetch
+git reset --hard <nome dato al repository remoto>/<branch>
+
+Per fare il checkout di un branch da un repository remoto
+git checkout <nome_branch_nel_repo_remoto>
+
+Nel caso in cui ci sia più di un repo che contiene un branch con lo stesso nome, allora va usata la sintassi:
+git checkout <nome_repo_da_cui_prendere_il_branch>/<nome_branch_nel_repo_remoto>
+
+Se inoltre si vuole fare il tracking del branch remoto (cioè, si possono poi fare pull e push dal/al branch remoto):
+git checkout --track <nome_repo_da_cui_prendere_il_branch>/<nome_branch_nel_repo_remoto>
+
+NOTA
+A volte, nel caso di checkout di branch remoti presenti su più repo remoti, si possono avere problemi con comandi quali git log. Ad esempio, si vuole visualizzare la storia di un branch di cui si è fatto il checkout, ma appare la storia di un altro branch con lo stesso nome. Allora, per essere sicuri si riferirsi al branch giusto, usare il suo nome esteso. Per esempio
+git log <nome_repo_da_cui_prendere_il_branch>/<nome_branch_nel_repo_remoto>
+anziché solo
+git log <nome_branch_nel_repo_remoto>
+
+Per applicare patch
+
+git am <patch1> <patch2> ...
+
+In caso di fallimento, dovuto di norma a conflitti:
+git am --abort
+
+Per applicare una o più patch facendosi aiutare da git in caso di conflitti:
+git am -3 <patch1> <patch2> ...
+
+- Vi consiglio di applicare e gestire una patch alla volta
+
+Per controllare i conflitti:
+git diff
+
+Per risolvere i conflitti, editare i file interessati a mano. Per ciascun conflitto evidenziato da git, bisogna decidere fondamentalmente quale delle due versioni ci va bene, oppure decidere se è necessario qualcosa di diverso da entrambe le proposte. Ricordarsi di eliminare dal file anche i marker messi da git.
+
+Vedremo un esempio concreto di risoluzione dei conflitti a supporto del comando rebase.
+
+Per segnalare che riteniamo che un conflitto sia stato risolto su un dato file:
+git add <nome_file>
+
+Per fare continuare git am dopo la risoluzione dei conflitti su tutti i file coinvolti:
+git am --continue
+
+Per abbandonare se ci arrendiamo:
+git am --abort
+
+Per creare una copia del branch corrente (e selezionarla come nuovo branch corrente):
+git checkout -b <nome nuovo branch>
+Tale branch sarà una copia esatta del branch di partenza
+
+Si può creare un branch anche a partire da un tag. In tal caso, il nuovo branch avrà tutti i commit fino al commit etichettato con tale tag, ad esempio:
+git checkout -b <nome nuovo branch> v5.12
+sarà una copia del master, tagliato al commit che ha come tag v5.12
+
+Configurazione nome utente ed indirizzo email (necessario per i passaggi successivi).
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+NOTA: Un errore comune, per il quale git non da segnalazioni, ma si limita poi solo a funzionare male, è scrivere mail al posto di email!
+
+Per creare un commit che contiene tutte le modifiche attuali
+git commit -a
+
+Per creare commit firmati automaticamente:
+git commit -as
+
+Per dare il messaggio da riga di comando (solo il titolo):
+git commit -as -m "titolo commit"
+
+Scegliere l'editor che viene avviato automaticamente per comandi come git commit:
+git config --global core.editor /usr/bin/vim
+(questa è anche la scelta giusta per far lavorare vim opportunamente in OS X, cioè per evitare, per esempio, che l'operazione di commit fallisca se si da qualche comando sbagliato a vi prima di chiudere l'editor correttamente)
+
+Per creare un commit con solo una parte dei file
+git add <nome_file_1> <nome_file_2> ...
+(i file aggiunti passano dallo stato unstaged all stato staged for commit)
+git commit
+
+Per controllare le modifiche pronte per il commit, ossia quelle che sarebbero trasformate in un commit nel caso invochiate il comando "git commit" senza opzioni:
+git diff --cached
+
+Per far passare di nuovo un file in stato unstaged:
+git reset <percorso_file>
+
+Per creare un commit solo da parte delle modifiche:
+1. git add -p
+2. Seguire poi le istruzioni per aggiungere un hunk alla volta. Nel caso abbiate bisogno anche di spezzare qualche hunk (opzione split), attenzione al fatto che git riesce a spezzare un hunk solo nei punti in cui ci sono righe in cui l'hunk non effettua modifiche. Se, invece, l'hunk costituito da un blocco unico di righe modificata, allora, per spezzarlo, dovete scegliere l'opzione edit, e seguire le istruzioni fornite da git.
+3. Per controllare le modifiche pronte per il commit
+git diff --cached
+4. Per riportare in stato unstaged un file per il quale avete erroneamente aggiunto degli hunk:
+git reset <percorso_file>
+5. Per effettuare il commit
+git commit
+
+Per spezzare un commit
+
+1. Se si vuole riutilizzare il titolo ed il messaggio di commit, metterli da parte in qualche modo. Oppure mettere da parte semplicemente l'hash del commit, e poi visualizzare il messaggio con un comando come:
+git show <hash> --pretty=e
+Questo comando continuerà a funzionare anche dopo l'esecuzione dei comandi ai punti seguenti.
+2. git reset HEAD~ # elimina l'ultimo commit senza modificare l'albero di lavoro
+3a. git add -p # aggiungere solo gli hunk che si vuole
+oppure
+3b. git add <nome_file_1> <nome_file_2> ... # per aggiungere solo i file che si vuole
+4. git commit # fare un commit con gli hunk parziali
+5. Ripetere dal punto 3 per il prossimo commit, e così via
+
+
+Tecnica alternativa per spezzare un commit, o in generale per estrarre pezzi di un commit, senza git reset
+
+1. Eliminare manualmente una delle modifiche, modificando il file interessato. Supponiamo che il commit da modificare si chiami C-ORIGINALE
+2. A questo punto nelle diff ci sarà la modifica al contrario
+3. Creare un commit con tale diff, chiamiamolo C-INVERSO
+4. Creare un commit di revert per tale commit. Il commit di revert è di fatto la modifica non più al contrario. Lo chiamiamo C-DIRETTO
+5. Effettuare lo squash di C-INVERSO su C-ORIGINALE. A questo punto C-ORIGINALE non contiene più tale modifica, che invece sta dentro C-INVERSO
+
+Per modificare il commit in testa:
+git commit --amend -a
+Per modificare solo titolo e messaggio del commit in testa:
+git commit --amend
+
+Per creare una patch dal commit in testa:
+git format-patch HEAD~
+
+Per creare delle patch per gli n commit in testa
+git format-patch HEAD~n
+
+
+Per creare una sola patch
+git format-patch <sha_commit>~..<sha_stesso_commit>
+
+Per cambiare la storia:
+git rebase -i <padre-commit-da-cui-modificare-la-storia>
+
+Per eliminare un branch:
+git branch -D <nome branch>
+
+Per 'spingere' i commit locali su un branch remoto, ecco una soluzione complessa ma completo, che permette di fare anche dei push parziali:
+
+git push <nome repo remoto> <sha commit più in alto che si vuole mandare>:<branch remoto>
+
+Per esempio:
+git push bfq-mq-remote-repo HEAD~:dev-bfq-on-5.3
+spedisce i commit fino a quello precedente la HEAD, sul branch dev-bfq-on-5.3 del repository remoto bfq-mq-remote-repo
+
+Il git push funziona su branch remoti sui quali abbiamo diritto di scrittura.
+
+Oltre ad un push dei commit, esiste anche un meccanismo con controllo della procedura, per dare la possibilità di proporre i propri commit all'amministratore di un repository per il quale non abbiamo i diritti in scrittura (o per il quale non intendiamo scrivere le cose forzatamente, ma preferiamo metterci d'accordo). Questo procedura è tipicamente chiamata Pull Request.
+
+Prendere un commit qualsiasi (quindi anche appartenente ad un altro branch) ed applicarlo in testa al branch attivo:
+git cherry-pick <hash del commit>
+
+Non serve specificare il branch a cui appartiene il commit, perché l'hash è sufficiente ad identificare univocamente il commit.
+
+Prendere un range di commit:
+git cherry-pick <hash del commit di partenza>~..<hash del commit finale>
+
+--------------------------
+
+Per eliminare la storia da un branch:
+(per esempio perché è diventato troppo grande per stare su un repo ospitato da un servizio tipo bitbucket)
+https://passingcuriosity.com/2017/truncating-git-history/
+
+Ad esempio, per ottenere un branch bfq-mq-private in cui la storia parte solo dal commit che introduce la versione 4.16 di Linux, e farne il push su un repository remoto che si chiama anch'esso bfq-mq-private:
+git checkout master
+git checkout -b master-v4.16 v4.16
+git checkout --orphan temp 0adb32858b0bddf4ada5f364a84ed60b196dbcda # commit Linux 4.16
+git commit -m "Linux 4.16"
+git cherry-pick 622821c94591~..c614f6586fd8 # sequenza di commit di bfq in bfq-mq-private
+# risolvere i conflitti, se necessario, usando poi
+# git add -u # se git diff da ancora differenze
+# git cherry-pick --continue
+git branch -D bfq-mq-private # se bfq-mq-private esiste gia' (passo distruttivo!)
+git branch -m temp bfq-mq-private
+git push --force --set-upstream bfq-mq-private bfq-mq-private
+git branch -D master-v4.16
+
+--------------------------
+
+Git vieta di eseguire operazioni sui branch (checkout, pull, merge, rebase, ...) se ci sono modifiche pendenti nel repository. Quindi, per poter effettuare tali operazioni, ci sono varie possibilità.
+
+1. git reset --hard
+Questo distrugge però tutte le modifiche
+
+2. git commit -a
+E si mettono tutte le modifiche in un commit temporaneo
+
+3. git stash
+A volte creare dei commit temporanei può essere sorgente di confusione. Per evitare di creare tali commit temporanei, si può utilizzare git stash. Per mettere da parte modifiche pendenti:
+git stash
+Per vedere la lista delle modifiche pendenti:
+git stash list
+Per riapplicare le ultime modifiche messe da parte, e toglierle dalla lista:
+git stash pop
+
+--------------------------
+
+Per tenere un commit ancora in sviluppo in un branch, in modo tale da non perdere/dimenticare il commit, senza avere gli effetti del commit sui file, e senza dover adottare soluzione più complesse (staging, branch multipli), un semplice trucco è
+git revert <commit_da_tenere>
+Questo crea un nuovo commit che effettua il revert di quello che si vuole tenere. Per tornare a lavorare sul commit, basterà poi eliminare semplicemente il revert (e risolvere gli eventuali conflitti che l'eliminazione del revert potrebbe causare).
+
+--------------
+
+PROBLEMA ri-compilazione dopo cambio branch
+
+git aggiorna i timestamp di TUTTI i file che vengono modificati se si cambia branch, anche se, nel nuovo branch, i file sono più vecchi rispetto al branch di partenza.
+
+Un trucco per evitare poi compilazioni inutili è sfruttare
+make --dry-run
+poi fare un touch dei file che effettivamente potrebbero essere cambiati, quindi effettuare la vera e propria compilazione
+
+Il trucco non funziona per certe configurazioni del kernel. Ad esempio, nel caso ci sia objtool abilitato.
+
+Un altro sistema, molto più robusto, ma un po' più impegnativo, è l'uso dei worktree. Sostanzialmente, potete effettuare tutte le operazioni di cambio branch e simili nel vostro repository principale, e poi, quando finalmente volete compilare, fare solo un push, verso tale worktree, del branch che vi interessa compilare. Facendo così, i timestamp cambieranno effettivamente solo per i file che cambiano effettivamente tra il nuovo push che fate ed il push precedente.
+
+----------------
+
+Scaricamento di un commit da GitHub, direttamente sotto forma di patch:
+http://chem-bla-ics.blogspot.com/2011/01/github-tip-download-commits-as-patches.html
+
+----------------
+
+FUSIONE (MERGE) DI DUE BRANCH
+
+Un caso in cui può capitare di fondere due branch è il seguente:
+1) Sviluppate delle patch per una certa versione del kernel
+2) Poi volete usare le stesse patch su una nuova versione del kernel
+
+Per risolvere il problema col merge, basta fare questo, assumendo che il branch che contiene le patch si chiami orig:
+1) Create una copia di backup di orig
+2) Create un branch contenente la nuova versione del kernel, che chiamiamo, ad esempio newkern
+3) Assumendo che il branch corrente sia orig, eseguite
+git merge newkern
+
+Se la fusione genera conflitti, allora si blocca e vi permette di vedere i conflitti col solito
+git diff
+
+Risolvete i conflitti e fate
+git add <file in cui avete risolto i conflitti>
+oppure semplicemente
+git add -u
+
+A questo punto, per completare il merge, basta fare un
+git commit
+
+Oltre a fondere i due branch e mettere il risultato in orig, il git merge crea un nuovo commit: un cosiddetto commit di merge. Se rimuovete tale commit, va via tutto il merge.
+
+--------------------------------
+
+VANTAGGI E SVANTAGGI DEL MERGE
+
+Un vantaggio del merge è che memorizza la vostra risoluzione dei conflitti. Per vedere come avete risolto i conflitti, basta un
+git show -m <sha del commit di merge>
+
+Il merge da il problema che crea due storie separate dentro un branch. Questo può rendere complicato capire la storia del branch, se si inizia a fare merge molto frequenti. Inoltre può diventare impossibile poi utilizzare molti dei commit nel branch, perché funzionano solo a patto di ripetere la risoluzione dei conflitti presente nel commit di merge. Infine il merge è spesso più permissivo con i conflitti rispetto alle due alternative seguenti, per cui qualcosa può sfuggire.
+
+--------------------------------
+
+
+ALTERNATIVE AL MERGE
+
+Ci sono due alternative al merge, per ottenere (quasi) lo stesso risultato di un merge
+1) Fare un esplicito
+git cherry-pick <commits di interesse presi da orig>
+da dentro newkern (newkern diventerà quindi il branch con tutto dentro)
+2) Fare un
+git rebase newkern
+da dentro orig
+
+Il problema di queste due alternative è che i cambiamenti che eventualmente farete per risolvere i conflitti diventeranno degli amend dei commit che causano tali conflitti, e quindi non avrete più modo di visualizzarli separatamente.
+
+----------------------------------
+
+CREAZIONE DI UN PROPRIO REPOSITORY A PARTIRE DA UN ALBERO DI CARTELLE
+
+cd <cartella radice dell'albero>
+git init
+git add . # inserisce nel repository l'intero contenuto della cartella
+git commit -m "messaggio che vi pare, tipo "Initialize repository""
+
+----------------------------------
+
+COMANDI UTILI QUANDO SI LAVORA SU DUE BRANCH DISTINTI
+
+Posizionarsi nel branch nel quale si vogliono effettuare le modifiche
+git checkout <branch di lavoro>
+
+Per controllare i commit nell'altro branch, con anche le diff:
+git log -p <nome_altro_branch>
+
+Per vedere il contenuto dei file nell'altro branch:
+git show <nome_altro_branch>:<path_del_file>
+
+Per vedere le diff tra il branch di lavoro e l'altro:
+git diff <nome_altro_branch>
+
+Per confrontare il contenuto di specifici file tra due branch (anche due file con nomi diversi):
+https://stackoverflow.com/questions/4099742/how-to-compare-files-from-two-different-branches
+
+Queste differenze possono essere usate per creare una patch, ad esempio:
+git diff contributions_for_master:block/bfq-wf2q.c bfq-mq-on-4.19:block/bfq-sched.c > production_to_dev_transformation/wf2q_to_sched-raw.diff
+
+E tale patch può essere applicata, per esempio, con
+git apply <nome_file>
+
+Dalle modifiche risultanti si può poi creare un commit, dopo aver eventualmente effettuato ulteriori modifiche, o usando git add -p per applicare solo alcuni cambiamenti.
+
+---------------------------------------
+
+Esercizio di risoluzione dei conflitti: porting di dev-bfq ad una versione più recente del kernel
+
+1. Creazione di un transition-bfq-on-<kernel-version>
+- Per effettuare questo passo, spostare tutti i commit 'sotto' al commit di aggiunta dei BUG_ON e dei log di base. Chiamiamolo brevemente commit di base. Bisogna portare sotto tutti i commit che sono già presenti nella versione di destinazione del kernel. Si ottiene così una nuova versione del commit di base, che è adatta al nuovo kernel, perché già sta al di sopra degli stessi commit di BFQ. In effetti però, nella nuova versione del kernel potrebbero essere presenti dei commit che non sono presenti affatto nella versione di partenza del kernel
+2. Applicazione del commit di base, e di tutti i possibili commit di DEBUG successivi, sopra al nuovo kernel.

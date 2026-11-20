@@ -1,0 +1,36 @@
+Descrizione più dettagliata del block layer in due articoli:
+https://lwn.net/Articles/736534/
+https://lwn.net/Articles/738449/
+
+Diagramma Storage Stack
+https://www.thomas-krenn.com/en/wiki/Linux_Storage_Stack_Diagram#Diagram_for_Linux_Kernel_4.10
+
+blk e blk-mq:
+http://kernel.dk/blk-mq.pdf
+
+I/O scheduling:
+https://en.wikipedia.org/wiki/I/O_scheduling
+
+In Linux è arrivato BFQ:
+https://www.miamammausalinux.org/2017/04/nuovo-io-scheduler-per-il-kernel-bfq/
+
+Demo BFQ:
+https://youtu.be/ANfqNiJVoVE
+
+Homepage BFQ:
+http://algogroup.unimore.it/people/paolo/disk_sched/
+
+Documentazione aggiornata su BFQ (solo) in:
+Documentation/block/bfq-iosched.txt
+
+Approfondimento algoritmi in BFQ (un po' datato, ma l'essenza del motore è quella):
+http://algo.ing.unimo.it/people/paolo/disk_sched/mst-2015.pdf
+
+I/O control con BFQ:
+https://lwn.net/Articles/763603/
+
+Codice di BFQ:
+Nell'albero del kernel linux: block/bfq*
+
+Parallelismo: problema delle barriere di memoria
+https://www.kernel.org/doc/Documentation/memory-barriers.txt
