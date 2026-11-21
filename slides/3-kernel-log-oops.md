@@ -411,6 +411,7 @@ Note su punto 3
 
 Nota sul punto 5
 - Nonostante l'eccezione venga causata nell'handler di un interrupt, il kernel quasi sicuramente sopravvive. A morire è solo il processo che ha la sfortuna di essere in esecuzione sul core su cui viene eseguito l'handler dell'interrupt.
+- NB: in realtà vado in kernel panic con questo messaggio: "[   33.810836] ---[ end Kernel panic - not syncing: Fatal exception in interrupt ]---"
 
 Potete trovare un modulo kernel che causa vari tipi di crash qui:
 https://github.com/arighi/crashtest
