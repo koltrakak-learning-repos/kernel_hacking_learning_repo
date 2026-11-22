@@ -1,23 +1,5 @@
-If:
-  PathExclude: (.*/)?userspace_helpers/.*
 CompileFlags:
-  Add:
-    - "-x"
-    - "c"
-    - "-std=gnu11"
-    - "-D__KERNEL__"
-    - "-DMODULE"
-    - "-nostdinc"
-    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/include"
-    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/arch/x86/include"
-    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/arch/x86/include/generated"
-    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/build/include"
-    - "-I/home/kevin/GitRepos/kernel_hacking_learning_repo/linux/build/arch/x86/include/generated"
----
-If:
-  PathMatch: (.*/)?userspace_helpers/.*
-CompileFlags:
-  Add:
-    - "-x"
-    - "c"
-    - "-std=gnu11"
+  CompilationDatabase: linux
+  Remove: [-fconserve-stack, -mno-fp-ret-in-387, -mpreferred-stack-boundary=*, -fno-allow-store-data-races, -fmin-function-alignment=*, -mrecord-mcount, -mfentry]
+Diagnostics:
+  Suppress: [drv_unknown_argument]
