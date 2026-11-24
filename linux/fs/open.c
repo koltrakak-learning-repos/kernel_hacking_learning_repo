@@ -1436,6 +1436,15 @@ SYSCALL_DEFINE4(openat, int, dfd, const char __user *, filename, int, flags,
 {
 	if (force_o_largefile())
 		flags |= O_LARGEFILE;
+
+	// DEBUG: 
+	// nota come i puntatori da userspace richiedono di essere tradotti
+	struct filename *name = getname(filename);
+	if (!IS_ERR(name)) {
+		pr_alert("KK - openat: %s\n", name->name);
+		putname(name);
+	}
+
 	return do_sys_open(dfd, filename, flags, mode);
 }
 
