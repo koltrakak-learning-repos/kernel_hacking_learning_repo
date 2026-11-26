@@ -174,3 +174,48 @@ Dalla manpage: The trace-cmd command interacts with the Ftrace tracer that is bu
     - only for the function_graph tracer 
     - it will only trace the given function and all functions that it calls
     - you can have more than one -g on the command line
+
+...
+
+## problemi di buffer overrun
+
+...
+
+una buona idea è spegnere la traccia appena avviene l'evento di interesse che è interessante osservare. In questo modo non si rischia di perdere la traccia.
+
+# Tracing I/O
+
+finora abbiamo visto come fare tracing sulla CPU
+
+...
+
+con l'I/O la variabilità e la riproducibilità dei risultati è molto più marcata
+
+- considera avere un blocco in cache piuttosto che dover accedere il disco
+- per questo motivo è comune in questo contesto flushare le cache per fare dei test riproducibili
+
+...
+
+possiamo utilizzare il blk tracer di ftrace
+
+- ... però sembra non funzionare bene
+
+...
+
+abbiamo anche un blktrace apposito
+
+...
+
+se si trova un bug nel kernel, ricordarsi di aggiungere un reproducer (selftests)
+
+
+TODO: chiedi di approfondire il discorso di usare l'ai per imparare
+
+- pericolo di atrofia del pensiero (tutto mi viene spiegato e non devo arrangiarmi)
+- NB: il punto è non essere passivi, bisogna sempre studiarsi il codice e discutere con quello che ti risponde l'LLM
+
+...
+
+```
+se sei un contributor di un progetto opensource importante claude di offre una subscription elite per 6 mesi gratis
+```
